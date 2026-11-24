@@ -116,8 +116,8 @@ nav [aria-current],
 	--landing-ground: #11110f;
 	--landing-edge: clamp(1.25rem, 4vw, 3.5rem);
 	--landing-brand-scale: 0.08;
-	--landing-image-start-scale: 0.06;
-	--landing-image-start-offset: 19vw;
+	--landing-image-start-scale: 0.14;
+	--landing-image-start-offset: 22vw;
 	position: relative;
 	min-height: 100svh;
 	background: var(--landing-ground);
@@ -152,7 +152,7 @@ nav [aria-current],
 	height: 100%;
 	display: block;
 	object-fit: cover;
-	object-position: center 54%;
+	object-position: center 66%;
 }
 .landing-brand {
 	position: absolute;
@@ -171,15 +171,6 @@ nav [aria-current],
 	font-weight: 400;
 	line-height: 0.9;
 	white-space: nowrap;
-}
-.landing-o {
-	background-image: url("/coast-sheep.jpg");
-	background-position: center 54%;
-	background-size: 100vmax 100vmax;
-	background-clip: text;
-	-webkit-background-clip: text;
-	color: var(--landing-paper);
-	-webkit-text-fill-color: transparent;
 }
 .landing-signin {
 	position: absolute;
@@ -227,17 +218,18 @@ nav [aria-current],
 }
 @media (max-width: 30rem) {
 	.landing {
-		--landing-image-start-offset: 15vw;
+		--landing-image-start-offset: 14vw;
 	}
 }
 @media (min-width: 120rem) {
 	.landing {
-		--landing-image-start-offset: 16vw;
+		--landing-image-start-offset: 22vw;
+		--landing-image-start-scale: 0.14;
 	}
 }
 @media (min-width: 144rem) {
 	.landing {
-		--landing-image-start-offset: 12vw;
+		--landing-image-start-offset: 18vw;
 	}
 }
 .planner {

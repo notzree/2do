@@ -45,11 +45,7 @@ function readLocation() {
 }
 
 function Wordmark() {
-  return (
-    <span className="landing-wordmark">
-      2d<span className="landing-o">o</span>
-    </span>
-  );
+  return <span className="landing-wordmark">2do</span>;
 }
 
 function Landing() {
