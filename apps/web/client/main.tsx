@@ -16,7 +16,11 @@ import {
 } from "./calendar.ts";
 import { DayEditor } from "./day-editor.tsx";
 import { Sidebar } from "./sidebar.tsx";
-import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { TaskList, type ListActions } from "./agenda.tsx";
 import { Chatbar } from "./chatbar.tsx";
 import { TaskDialog } from "./task-dialog.tsx";
@@ -42,8 +46,8 @@ function readLocation() {
 
 function Wordmark() {
   return (
-    <span className="wordmark">
-      2do<span>.</span>
+    <span className="landing-wordmark">
+      2d<span className="landing-o">o</span>
     </span>
   );
 }
@@ -51,13 +55,18 @@ function Wordmark() {
 function Landing() {
   return (
     <main className="landing">
-      <div className="landing-card">
-        <Wordmark />
-        <h1>Your daily planner</h1>
-        <a className="primary" href="/app">
+      <div className="landing-scroll" aria-hidden="true" />
+      <section className="landing-scene" aria-label="2do">
+        <div className="landing-image-reveal" aria-hidden="true">
+          <img src="/coast-sheep.jpg" alt="" fetchPriority="high" />
+        </div>
+        <a className="landing-brand" href="/" aria-label="2do home">
+          <Wordmark />
+        </a>
+        <a className="landing-signin" href="/app">
           Sign in
         </a>
-      </div>
+      </section>
     </main>
   );
 }

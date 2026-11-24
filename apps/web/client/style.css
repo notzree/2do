@@ -111,25 +111,134 @@ nav [aria-current],
 	color: var(--accent);
 	font-weight: 650;
 }
-.wordmark {
-	font-size: 1.9rem;
-	font-weight: 800;
-	letter-spacing: -0.09em;
-}
-.wordmark span {
-	color: var(--accent);
-}
 .landing {
+	--landing-paper: #f8f5df;
+	--landing-ground: #11110f;
+	--landing-edge: clamp(1.25rem, 4vw, 3.5rem);
+	--landing-brand-scale: 0.08;
+	--landing-image-start-scale: 0.06;
+	--landing-image-start-offset: 19vw;
+	position: relative;
 	min-height: 100svh;
-	display: grid;
-	place-items: center;
-	text-align: center;
+	background: var(--landing-ground);
+	color: var(--landing-paper);
 }
-.landing .wordmark {
-	font-size: 5rem;
+.landing-scroll {
+	height: 200svh;
 }
-.landing h1 {
-	margin: 0 0 1.5rem;
+.landing-scene {
+	position: fixed;
+	inset: 0;
+	z-index: 1;
+	height: 100svh;
+	overflow: hidden;
+	isolation: isolate;
+	background: var(--landing-ground);
+}
+.landing-image-reveal {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 100vmax;
+	height: 100vmax;
+	overflow: hidden;
+	border-radius: 50%;
+	translate: -50% -50%;
+	scale: 1.5;
+	transform-origin: center;
+}
+.landing-image-reveal img {
+	width: 100%;
+	height: 100%;
+	display: block;
+	object-fit: cover;
+	object-position: center 54%;
+}
+.landing-brand {
+	position: absolute;
+	top: var(--landing-edge);
+	left: var(--landing-edge);
+	z-index: 1;
+	display: block;
+	color: var(--landing-ground);
+	transform: scale(var(--landing-brand-scale));
+	transform-origin: top left;
+}
+.landing-wordmark {
+	display: block;
+	font-family: "Baskervville", Georgia, serif;
+	font-size: clamp(16rem, 34vw, 32rem);
+	font-weight: 400;
+	line-height: 0.9;
+	white-space: nowrap;
+}
+.landing-o {
+	background-image: url("/coast-sheep.jpg");
+	background-position: center 54%;
+	background-size: 100vmax 100vmax;
+	background-clip: text;
+	-webkit-background-clip: text;
+	color: var(--landing-paper);
+	-webkit-text-fill-color: transparent;
+}
+.landing-signin {
+	position: absolute;
+	top: var(--landing-edge);
+	right: var(--landing-edge);
+	z-index: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 2.75rem;
+	padding: 0.65rem 1.15rem;
+	border: 1px solid rgb(248 245 223 / 48%);
+	border-radius: 999px;
+	background: var(--landing-ground);
+	color: var(--landing-paper);
+	font-size: 0.85rem;
+	font-weight: 550;
+	opacity: 1;
+	transition:
+		background-color 160ms ease-out,
+		color 160ms ease-out;
+}
+.landing-signin:hover {
+	background: var(--landing-paper);
+	color: var(--landing-ground);
+}
+.landing-signin:focus-visible {
+	opacity: 1 !important;
+	pointer-events: auto !important;
+	transform: translateY(0) !important;
+}
+@media (max-width: 48rem) {
+	.landing {
+		--landing-brand-scale: 0.25;
+		--landing-image-start-scale: 0.035;
+		--landing-image-start-offset: 12vw;
+	}
+	.landing-wordmark {
+		font-size: clamp(6rem, 20vw, 9rem);
+	}
+	.landing-signin {
+		min-height: 2.5rem;
+		padding-inline: 1rem;
+	}
+}
+@media (max-width: 30rem) {
+	.landing {
+		--landing-image-start-offset: 15vw;
+	}
+}
+@media (min-width: 120rem) {
+	.landing {
+		--landing-image-start-offset: 16vw;
+	}
+}
+@media (min-width: 144rem) {
+	.landing {
+		--landing-image-start-offset: 12vw;
+	}
 }
 .planner {
 	padding-block: clamp(1.5rem, 5vw, 3.5rem) 4rem;
@@ -566,3 +675,62 @@ button.embed-title{text-align:left;padding:.05rem 0;line-height:1.5}
 input { accent-color: var(--accent); }
 .side-bottom .settings-link { display: flex; gap: .65rem; align-items: center; padding: .55rem .7rem; border-radius: .45rem; color: var(--muted); font-size: .875rem; }
 .settings-link:hover, .settings-link[aria-current] { background: var(--soft); color: var(--ink); }
+
+@supports (animation-timeline: scroll()) {
+	.landing-image-reveal {
+		animation: landing-image-open linear both;
+		animation-timeline: scroll(root block);
+		animation-range: 0vh 90vh;
+	}
+	.landing-brand {
+		animation: landing-brand-dock linear both;
+		animation-timeline: scroll(root block);
+		animation-range: 0vh 90vh;
+	}
+	.landing-signin {
+		animation: landing-signin-appear linear both;
+		animation-timeline: scroll(root block);
+		animation-range: 0vh 90vh;
+	}
+}
+@keyframes landing-image-open {
+	from {
+		translate: calc(-50% + var(--landing-image-start-offset)) -50%;
+		scale: var(--landing-image-start-scale);
+	}
+	to {
+		translate: -50% -50%;
+		scale: 1.5;
+	}
+}
+@keyframes landing-brand-dock {
+	from {
+		color: var(--landing-paper);
+		transform: translate(
+				calc(50vw - 50% - var(--landing-edge)),
+				calc(50svh - 50% - var(--landing-edge))
+			)
+			scale(1);
+	}
+	to {
+		color: var(--landing-ground);
+		transform: translate(0, 0) scale(var(--landing-brand-scale));
+	}
+}
+@keyframes landing-signin-appear {
+	from {
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-0.75rem);
+	}
+	to {
+		opacity: 1;
+		pointer-events: auto;
+		transform: translateY(0);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.landing-scroll {
+		height: 100svh;
+	}
+}
