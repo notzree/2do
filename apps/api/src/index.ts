@@ -1,19 +1,29 @@
-import { DurableObject } from "cloudflare:workers";
+import { Hono } from "hono";
+import { identify } from "./access.ts";
+import { operations as op, openApiDocument } from "./routes/contract.ts";
 
-// The authenticated command handler will select one instance per internal user ID.
-export class UserPlanner extends DurableObject {}
+export { UserPlanner } from "./user-planner.ts";
 
-export default {
-	fetch(request) {
-		if (new URL(request.url).pathname !== "/api/health") {
-			return Response.json({ error: "Not found" }, { status: 404 });
-		}
-		if (request.method !== "GET") {
-			return Response.json(
-				{ error: "Method not allowed" },
-				{ status: 405, headers: { Allow: "GET" } },
-			);
-		}
-		return Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } });
-	},
-} satisfies ExportedHandler;
+const app = new Hono<{ Bindings: Env }>();
+app.use(async (c, next) => {
+	await next();
+	c.header("Cache-Control", "no-store");
+});
+app.on(op.health.method, op.health.path, (c) => c.json({ status: "ok" }));
+app.all(op.health.path, (c) => {
+	c.header("Allow", "GET");
+	return c.json({ error: "Method not allowed" }, 405);
+});
+app.on(op.openapi.method, op.openapi.path, (c) => c.json(openApiDocument()));
+
+async function dispatch(request: Request, env: Env) {
+	const identity = await identify(request, env);
+	if (identity instanceof Response) return identity;
+	return env.USER_PLANNER.getByName(identity).fetch(request);
+}
+for (const prefix of ["/api/tasks", "/api/dependencies", "/api/days", "/api/images"]) {
+	app.all(prefix, (c) => dispatch(c.req.raw, c.env));
+	app.all(prefix + "/*", (c) => dispatch(c.req.raw, c.env));
+}
+app.notFound((c) => c.json({ error: "Not found" }, 404));
+export default app;

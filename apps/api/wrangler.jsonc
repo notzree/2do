@@ -1,0 +1,32 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "2do-api",
+	"compatibility_date": "2026-11-17",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": false,
+	// Workers Traces shows each Copilot response as a trace with agent-level spans.
+	"observability": { "enabled": true, "traces": { "enabled": true } },
+	// The Copilot agent runs keyless on Workers AI through this binding.
+	"ai": { "binding": "AI" },
+	// Deployment values for the Access vars are supplied with
+	// `wrangler deploy --var ACCESS_ISSUER:... --var ACCESS_AUD:...`
+	// (see the deploy script). Local development overrides LOCAL_PLANNER
+	// through .dev.vars.
+	"vars": {
+		"ACCESS_ISSUER": "",
+		"ACCESS_AUD": "",
+		"LOCAL_PLANNER": "disabled"
+	},
+	"r2_buckets": [{ "binding": "NOTEBOOK_IMAGES", "bucket_name": "2do-notebook-images" }],
+	"durable_objects": {
+		"bindings": [{ "name": "USER_PLANNER", "class_name": "UserPlanner" }]
+	},
+	// Flue generates one Durable Object class per agent (Copilot ->
+	// FlueCopilotAgent) and injects the FLUE_COPILOT_AGENT binding at build
+	// time. Keep the ordered history: append new tags, never rewrite them.
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["UserPlanner"] },
+		{ "tag": "flue-class-FlueCopilotAgent", "new_sqlite_classes": ["FlueCopilotAgent"] }
+	]
+}

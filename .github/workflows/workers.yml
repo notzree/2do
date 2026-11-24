@@ -1,0 +1,61 @@
+name: Workers
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ${{ github.event.repository.owner.type == 'Organization' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run openapi:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=infra/access init -backend=false -input=false
+      - run: terraform -chdir=infra/access validate
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ${{ github.event.repository.owner.type == 'Organization' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    environment: production
+    concurrency:
+      group: workers-production
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      PLANNER_HOSTNAME: ${{ vars.PLANNER_HOSTNAME }}
+      ACCESS_ISSUER: ${{ vars.ACCESS_ISSUER }}
+      ACCESS_AUD: ${{ vars.ACCESS_AUD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Check production settings
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          : "${CLOUDFLARE_API_TOKEN:?}" "${CLOUDFLARE_ACCOUNT_ID:?}" "${PLANNER_HOSTNAME:?}" "${ACCESS_ISSUER:?}" "${ACCESS_AUD:?}"
+      - name: Deploy API and Flue copilot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npm run deploy -w @2do/api
+      - name: Deploy React frontend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npm run deploy -w @2do/web

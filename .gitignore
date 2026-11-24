@@ -1,6 +1,10 @@
 node_modules/
+/.generated/mcp/
 dist/
 .cloudflare/
+.wrangler/
+.flue-vite*
+worker-configuration.d.ts
 .dev.vars*
 !.dev.vars.example
 .env*
@@ -8,3 +12,9 @@ dist/
 *.log
 *.tsbuildinfo
 .DS_Store
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+*.plan

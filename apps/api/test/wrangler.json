@@ -1,0 +1,16 @@
+{
+	"$schema": "../node_modules/wrangler/config-schema.json",
+	"name": "2do-api-test",
+	"compatibility_date": "2026-11-17",
+	"main": "worker.ts",
+	"vars": {
+		"ACCESS_ISSUER": "",
+		"ACCESS_AUD": "",
+		"LOCAL_PLANNER": "disabled"
+	},
+	"r2_buckets": [{ "binding": "NOTEBOOK_IMAGES", "bucket_name": "2do-notebook-images" }],
+	"durable_objects": {
+		"bindings": [{ "name": "USER_PLANNER", "class_name": "UserPlanner" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserPlanner"] }]
+}

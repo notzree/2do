@@ -1,0 +1,3 @@
+# Local development vars for the 2do-api Worker. Copy to .dev.vars.
+# LOCAL_PLANNER=enabled signs every loopback request in as the shared dev planner.
+LOCAL_PLANNER="enabled"

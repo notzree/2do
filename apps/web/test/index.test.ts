@@ -8,6 +8,7 @@ it.each([
 ] as const)("routes %s to %s", async (path, target) => {
 	const env = {
 		API: { fetch: vi.fn(async () => new Response("API")) },
+		API_DEV_URL: "",
 		ASSETS: { fetch: vi.fn(async () => new Response("ASSETS")) },
 	};
 	const request = new Request(new URL(path, "https://example.com"));
