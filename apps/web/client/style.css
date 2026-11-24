@@ -116,8 +116,10 @@ nav [aria-current],
 	--landing-ground: #11110f;
 	--landing-edge: clamp(1.25rem, 4vw, 3.5rem);
 	--landing-brand-scale: 0.08;
-	--landing-image-start-scale: 0.14;
-	--landing-image-start-offset: 22vw;
+	--landing-mask-start-x: 50%;
+	--landing-mask-start-y: 50%;
+	--landing-mask-start-rx: 1rem;
+	--landing-mask-start-ry: 1rem;
 	position: relative;
 	min-height: 100svh;
 	background: var(--landing-ground);
@@ -137,15 +139,9 @@ nav [aria-current],
 }
 .landing-image-reveal {
 	position: absolute;
-	top: 50%;
-	left: 50%;
-	width: 100vmax;
-	height: 100vmax;
+	inset: 0;
 	overflow: hidden;
-	border-radius: 50%;
-	translate: -50% -50%;
-	scale: 1.5;
-	transform-origin: center;
+	clip-path: ellipse(150vmax 150vmax at 50% 50%);
 }
 .landing-image-reveal img {
 	width: 100%;
@@ -205,8 +201,6 @@ nav [aria-current],
 @media (max-width: 48rem) {
 	.landing {
 		--landing-brand-scale: 0.25;
-		--landing-image-start-scale: 0.035;
-		--landing-image-start-offset: 12vw;
 	}
 	.landing-wordmark {
 		font-size: clamp(6rem, 20vw, 9rem);
@@ -214,22 +208,6 @@ nav [aria-current],
 	.landing-signin {
 		min-height: 2.5rem;
 		padding-inline: 1rem;
-	}
-}
-@media (max-width: 30rem) {
-	.landing {
-		--landing-image-start-offset: 14vw;
-	}
-}
-@media (min-width: 120rem) {
-	.landing {
-		--landing-image-start-offset: 22vw;
-		--landing-image-start-scale: 0.14;
-	}
-}
-@media (min-width: 144rem) {
-	.landing {
-		--landing-image-start-offset: 18vw;
 	}
 }
 .planner {
@@ -687,12 +665,13 @@ input { accent-color: var(--accent); }
 }
 @keyframes landing-image-open {
 	from {
-		translate: calc(-50% + var(--landing-image-start-offset)) -50%;
-		scale: var(--landing-image-start-scale);
+		clip-path: ellipse(
+			var(--landing-mask-start-rx) var(--landing-mask-start-ry)
+				at var(--landing-mask-start-x) var(--landing-mask-start-y)
+		);
 	}
 	to {
-		translate: -50% -50%;
-		scale: 1.5;
+		clip-path: ellipse(150vmax 150vmax at 50% 50%);
 	}
 }
 @keyframes landing-brand-dock {

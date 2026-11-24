@@ -44,20 +44,60 @@ function readLocation() {
   return { view, date: selected, section };
 }
 
-function Wordmark() {
-  return <span className="landing-wordmark">2do</span>;
-}
-
 function Landing() {
+  const scene = useRef<HTMLElement>(null);
+  const o = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const sceneNode = scene.current!;
+    const oNode = o.current!;
+    if (!sceneNode || !oNode) return;
+
+    window.scrollTo(0, 0);
+    function alignReveal() {
+      if (window.scrollY > 0) return;
+      const sceneBounds = sceneNode.getBoundingClientRect();
+      const oBounds = oNode.getBoundingClientRect();
+      const centerX =
+        ((oBounds.left + oBounds.width / 2 - sceneBounds.left) / sceneBounds.width) * 100;
+      const centerY =
+        ((oBounds.top + oBounds.height / 2 - sceneBounds.top) / sceneBounds.height) * 100;
+      sceneNode.style.setProperty(
+        "--landing-mask-start-x",
+        `${centerX}%`,
+      );
+      sceneNode.style.setProperty(
+        "--landing-mask-start-y",
+        `${centerY}%`,
+      );
+      sceneNode.style.setProperty(
+        "--landing-mask-start-rx",
+        `${oBounds.width * 0.28}px`,
+      );
+      sceneNode.style.setProperty(
+        "--landing-mask-start-ry",
+        `${oBounds.height * 0.19}px`,
+      );
+    }
+
+    alignReveal();
+    const observer = new ResizeObserver(alignReveal);
+    observer.observe(sceneNode);
+    observer.observe(oNode);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <main className="landing">
       <div className="landing-scroll" aria-hidden="true" />
-      <section className="landing-scene" aria-label="2do">
+      <section className="landing-scene" aria-label="2do" ref={scene}>
         <div className="landing-image-reveal" aria-hidden="true">
           <img src="/coast-sheep.jpg" alt="" fetchPriority="high" />
         </div>
         <a className="landing-brand" href="/" aria-label="2do home">
-          <Wordmark />
+          <span className="landing-wordmark">
+            2d<span className="landing-o" ref={o}>o</span>
+          </span>
         </a>
         <a className="landing-signin" href="/app">
           Sign in
