@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { emptyPage, plannerScopeHeader, type NewTask, type NotebookDoc, type WritePage } from "@2do/api/notebook";
+import { emptyPage, plannerScopeHeader, type NewTask, type NotebookDoc } from "@2do/api/notebook";
 import { DayBuffer } from "./day-buffer.ts";
 import { openNotebookDraft, type NotebookDraft } from "./notebook-drafts.ts";
 import { api, PlannerRequestError, queryClient } from "./query.ts";
@@ -93,6 +93,25 @@ it("replays an interrupted PUT identically, then saves prose typed during that r
 	expect(put.mock.calls[2][1]).toMatchObject({ body: { revision: 1, doc: next, newTasks: [] } });
 	expect(profile.values.size).toBe(0);
 	await reopened.close();
+});
+
+it("keeps a failed offline save until the original planner can replay it", async () => {
+	const profile = browser(), original = profile.tab();
+	const doc = textDoc("Written without a connection");
+	const put = vi.spyOn(api, "PUT").mockRejectedValueOnce(new TypeError("Offline"))
+		.mockResolvedValueOnce(receipt(doc, 1));
+	await original.buffer.receive(page("A"));
+	original.buffer.change(doc);
+	await original.buffer.flush();
+	expect(original.buffer.get().status).toBe("Unsaved");
+	expect(profile.values.size).toBe(1);
+	await original.close();
+	const recovered = profile.tab();
+	await recovered.buffer.receive(page("A"));
+	await recovered.buffer.flush();
+	expect(put.mock.calls[1][1]).toEqual(put.mock.calls[0][1]);
+	expect(profile.values.size).toBe(0);
+	await recovered.close();
 });
 
 it("preserves both divergent tabs and restores the stale snapshot as a conflict", async () => {

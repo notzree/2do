@@ -1,8 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
-import { migrate } from "drizzle-orm/durable-sqlite/migrator";
-import migrations from "../drizzle/migrations.js";
+import { migratePlanner } from "./db/migrate.ts";
 import { ClefTaskClassifier } from "./classifiers/clef.ts";
 import { Notebook } from "./core/notebook.ts";
 import { Planner } from "./core/planner.ts";
@@ -31,7 +30,7 @@ export class UserPlanner extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		ctx.blockConcurrencyWhile(async () => {
-			await migrate(this.store, migrations);
+			await migratePlanner(this.store);
 			// A cold start may precede delivery of an existing alarm or its platform retry.
 			if (this.classification && await this.ctx.storage.getAlarm() === null) {
 				const due = this.pluginDb.nextDue();
@@ -61,9 +60,11 @@ export class UserPlanner extends DurableObject<Env> {
 		if (!this.classification) return write();
 		return this.ctx.storage.transaction(async (txn) => {
 			const armed = await txn.getAlarm();
+			const previousDue = armed === null ? null : this.pluginDb.nextDue();
 			const result = write();
 			const due = this.pluginDb.nextDue();
-			if (due !== armed) {
+			// An unrelated task edit must not pull forward a platform retry already in flight.
+			if (due !== armed && (armed === null || due === null || due !== previousDue)) {
 				if (due === null) await txn.deleteAlarm();
 				else await txn.setAlarm(due);
 			}

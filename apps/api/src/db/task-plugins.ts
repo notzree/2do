@@ -10,7 +10,10 @@ import {
 	tasks,
 } from "./schema.ts";
 
-export type ClassificationJob = Pick<typeof jobs.$inferSelect, "taskId" | "token" | "attempts" | "rawInput">;
+export type ClassificationJob = Pick<
+	typeof jobs.$inferSelect,
+	"taskId" | "token" | "attempts" | "rawInput"
+>;
 function lease(job: ClassificationJob) {
 	return and(
 		eq(jobs.taskId, job.taskId),
@@ -199,6 +202,10 @@ export class SqliteTaskPluginDatabase {
 			.get();
 	}
 	retry(job: ClassificationJob, due: number | null) {
-		this.db.update(jobs).set({ due }).where(and(lease(job), isNotNull(jobs.due))).run();
+		this.db
+			.update(jobs)
+			.set({ due })
+			.where(and(lease(job), isNotNull(jobs.due)))
+			.run();
 	}
 }

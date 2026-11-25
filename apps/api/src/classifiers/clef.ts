@@ -25,7 +25,9 @@ export class ClefTaskClassifier implements TaskClassifier {
 	}
 
 	async classify(inputs: readonly TaskClassificationInput[], signal?: AbortSignal) {
-		const attempts = await Promise.allSettled(inputs.map((input) => this.classifyTask(input, signal)));
+		const attempts = await Promise.allSettled(
+			inputs.map((input) => this.classifyTask(input, signal)),
+		);
 		const completed = attempts.flatMap((attempt) =>
 			attempt.status === "fulfilled" ? [attempt.value] : [],
 		);
@@ -42,7 +44,10 @@ export class ClefTaskClassifier implements TaskClassifier {
 		return completed;
 	}
 
-	private async classifyTask({ taskId, title, candidates }: TaskClassificationInput, signal?: AbortSignal) {
+	private async classifyTask(
+		{ taskId, title, candidates }: TaskClassificationInput,
+		signal?: AbortSignal,
+	) {
 		const result: Record<string, number> = {};
 		for (let start = 0; start < candidates.length; start += maxQuestions) {
 			signal?.throwIfAborted();
