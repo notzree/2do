@@ -7,24 +7,18 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import Underline from "@tiptap/extension-underline";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import type { NodeView } from "@tiptap/pm/view";
+import { ReactNodeViewRenderer } from "@tiptap/react";
+import { NotebookReference } from "./notebook-reference.tsx";
 
 const Strong = Bold.extend({ name: "strong" });
 const Em = Italic.extend({ name: "em" });
 
-export type Widget = {
-	dom: HTMLElement;
-	id: string;
-	kind: "taskRef" | "graphRef";
-};
-
-type RegisterWidget = (widget: Widget, remove?: boolean) => void;
-
-function referenceNode(name: Widget["kind"], registerWidget: RegisterWidget) {
+function referenceNode(name: "taskRef" | "graphRef") {
 	return Node.create({
 		name,
 		group: "block",
 		atom: true,
+		selectable: true,
 		draggable: true,
 
 		addAttributes() {
@@ -47,30 +41,17 @@ function referenceNode(name: Widget["kind"], registerWidget: RegisterWidget) {
 		},
 
 		addNodeView() {
-			return ({ node }): NodeView => {
-				const dom = document.createElement("div");
-				dom.className = `embedded ${name}`;
-				dom.contentEditable = "false";
-				dom.dataset.ref = name;
-				dom.dataset.id = node.attrs.id;
-				const widget: Widget = { dom, id: node.attrs.id, kind: name };
-				registerWidget(widget);
-
-				return {
-					dom,
-					stopEvent: (event) =>
-						event.target instanceof Element &&
-						!!event.target.closest("button,input") &&
-						!event.type.startsWith("drag"),
-					ignoreMutation: () => true,
-					destroy: () => registerWidget(widget, true),
-				};
-			};
+			return ReactNodeViewRenderer(NotebookReference, {
+				stopEvent: ({ event }) =>
+					event.target instanceof Element &&
+					!!event.target.closest("button,input,textarea,select,label,form,a[href]") &&
+					!event.type.startsWith("drag"),
+			});
 		},
 	});
 }
 
-export function editorExtensions(registerWidget: RegisterWidget): Extensions {
+export function editorExtensions(): Extensions {
 	const Heading = Node.create({
 		name: "heading",
 		group: "block",
@@ -124,8 +105,8 @@ export function editorExtensions(registerWidget: RegisterWidget): Extensions {
 		Strong,
 		Em,
 		Underline,
-		referenceNode("taskRef", registerWidget),
-		referenceNode("graphRef", registerWidget),
+		referenceNode("taskRef"),
+		referenceNode("graphRef"),
 		Image,
 		History,
 	];

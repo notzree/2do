@@ -1,4 +1,4 @@
-import type { WeekStart } from "./calendar.ts";
+import { nextPeriods, previousPeriods, type WeekStart } from "./calendar.ts";
 
 export const themes = [
   { id: "notebook", name: "Notebook", light: "Paper", dark: "Graphite" },
@@ -13,11 +13,16 @@ export type Theme = (typeof themes)[number]["id"];
 export type Mode = "light" | "dark" | "system";
 
 export const commands = [
-  { id: "day", name: "Open Daybook", key: "d" },
   { id: "week", name: "Open Week", key: "w" },
-  { id: "calendar", name: "Open Calendar", key: "c" },
+  { id: "calendar", name: "Open Month", key: "c" },
+  { id: "nextDay", name: nextPeriods.nextDay, key: "d" },
+  { id: "previousDay", name: previousPeriods.previousDay, key: "h" },
+  { id: "nextWeek", name: nextPeriods.nextWeek, key: "n" },
+  { id: "previousWeek", name: previousPeriods.previousWeek, key: "p" },
+  { id: "nextMonth", name: nextPeriods.nextMonth, key: "m" },
+  { id: "previousMonth", name: previousPeriods.previousMonth, key: "b" },
   { id: "today", name: "Go to today", key: "t" },
-  { id: "copilot", name: "Open Copilot", key: "a" },
+  { id: "copilot", name: "Open Agent", key: "a" },
   { id: "settings", name: "Open Settings", key: "s" },
 ] as const;
 export type Command = (typeof commands)[number]["id"];
@@ -37,32 +42,50 @@ export type Preferences = {
 };
 export const defaults: Preferences = {
   theme: "notebook",
-  mode: "system",
+  mode: "dark",
   weekStart: 0,
   keysEnabled: true,
   bindings: defaultBindings,
 };
 export const storageKey = "2do.preferences.v1";
 
+function restoreBindings(stored: Partial<Bindings> | undefined): Bindings {
+  const result = { ...defaultBindings };
+  const used = new Set<string>();
+  for (const { id } of commands) {
+    const key = stored?.[id];
+    if (key === undefined) continue;
+    if (!availableKeys.includes(key) || used.has(key)) return defaultBindings;
+    result[id] = key;
+    used.add(key);
+  }
+  // Preserve remaps from older versions, even when they use a new command's default.
+  for (const { id, key } of commands) {
+    if (stored?.[id] !== undefined) continue;
+    result[id] = used.has(key)
+      ? availableKeys.find((k) => !used.has(k) && !boundCommand(defaultBindings, k))!
+      : key;
+    used.add(result[id]);
+  }
+  return result;
+}
+
 export function readPreferences(): Preferences {
   try {
     const stored = localStorage.getItem(storageKey);
     const value = stored ? JSON.parse(stored) : {};
     const mode = value?.mode ?? localStorage.getItem("planner-theme");
-    const bindings = value?.bindings;
-    const keys = commands.map((c) => bindings?.[c.id]);
+    const selectedTheme = themes.find((t) => t.id === value?.theme);
     return {
-      theme: themes.find((t) => t.id === value?.theme)?.id ?? defaults.theme,
-      mode: mode === "light" || mode === "dark" ? mode : "system",
+      theme: selectedTheme?.id ?? defaults.theme,
+      mode: mode === "system" || mode === "light" || mode === "dark"
+        ? mode : selectedTheme ? "system" : defaults.mode,
       weekStart: value?.weekStart === 1 ? 1 : 0,
       keysEnabled:
         typeof value?.keysEnabled === "boolean"
           ? value.keysEnabled
           : localStorage.getItem("planner-keys") !== "off",
-      bindings:
-        keys.every((k) => availableKeys.includes(k)) && new Set(keys).size === keys.length
-          ? bindings
-          : defaultBindings,
+      bindings: restoreBindings(value?.bindings),
     };
   } catch {
     return defaults;

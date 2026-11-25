@@ -1,10 +1,7 @@
 import {
-  CalendarDays,
   Check,
-  Keyboard,
   Monitor,
   Moon,
-  Palette,
   RotateCcw,
   Settings2,
   Sun,
@@ -18,14 +15,10 @@ import {
   type Preferences,
 } from "./preferences.ts";
 import { shortcuts } from "./vim.ts";
+import { PluginSettings } from "./plugin-settings.tsx";
+import { sections, type Section } from "./settings-sections.ts";
 import "./settings.css";
 
-export const sections = [
-  { id: "appearance", title: "Appearance", Icon: Palette },
-  { id: "keybinds", title: "Keybinds", Icon: Keyboard },
-  { id: "calendar", title: "Calendar", Icon: CalendarDays },
-] as const;
-export type Section = (typeof sections)[number]["id"];
 const modes = [
   { id: "system", label: "System", Icon: Monitor },
   { id: "light", label: "Light", Icon: Sun },
@@ -205,9 +198,11 @@ export function Settings({ prefs, change, section, navigate }: Props) {
             </div>
           </section>
         )}
-        <footer className="preferences-note">
-          <Monitor size={13} /> Preferences apply on this device.
-        </footer>
+        {section === "plugins" ? <PluginSettings /> : (
+          <footer className="preferences-note">
+            <Monitor size={13} /> Preferences apply on this device.
+          </footer>
+        )}
       </div>
     </main>
   );

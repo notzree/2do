@@ -1,12 +1,43 @@
 import { expect, it } from "vite-plus/test";
 import { task } from "@2do/api/plan";
-import { dayKey, monthDays, onDay, weekDays } from "../client/calendar.ts";
+import { dayKey, monthDays, nextDate, onDay, previousDate, weekDays, weekOfMonth } from "../client/calendar.ts";
+
+it.each([
+  ["2026-12-31", "nextDay", "2027-01-01"],
+  ["2026-12-31", "nextWeek", "2027-01-07"],
+  ["2026-12-31", "nextMonth", "2027-01-31"],
+  ["2027-01-31", "nextMonth", "2027-02-28"],
+  ["2028-01-31", "nextMonth", "2028-02-29"],
+] as const)("moves from %s by %s to %s", (start, unit, expected) => {
+  expect(dayKey(nextDate(new Date(start + "T00:00:00"), unit))).toBe(expected);
+});
+
+it.each([
+  ["2027-01-01", "previousDay", "2026-12-31"],
+  ["2027-01-01", "previousWeek", "2026-12-25"],
+  ["2027-03-31", "previousMonth", "2027-02-28"],
+  ["2028-03-31", "previousMonth", "2028-02-29"],
+] as const)("moves from %s by %s to %s", (start, unit, expected) => {
+  expect(dayKey(previousDate(new Date(start + "T00:00:00"), unit))).toBe(expected);
+});
 
 it("renders a whole Sunday-first month including adjacent years", () => {
   const days = monthDays(new Date(2027, 0, 10));
   expect(days[0].getDay()).toBe(0);
   expect(dayKey(days[0])).toBe("2026-12-27");
   expect(dayKey(days.at(-1)!)).toBe("2027-02-06");
+});
+
+it.each([
+  ["2026-11-01", 1, 1],
+  ["2026-11-02", 1, 2],
+  ["2026-11-24", 4, 5],
+  ["2026-11-30", 5, 6],
+  ["2026-12-01", 1, 1],
+] as const)("numbers %s within its own month for either week start", (key, sunday, monday) => {
+  const date = new Date(key + "T00:00:00");
+  expect(weekOfMonth(date, 0)).toBe(sunday);
+  expect(weekOfMonth(date, 1)).toBe(monday);
 });
 
 it("shows the selected date's full Sunday-to-Saturday week", () => {
@@ -26,6 +57,8 @@ it("shows overnight activities on both days and treats the end as exclusive", ()
   const item = task.parse({
     id: crypto.randomUUID(),
     title: "Travel",
+    revision: 1,
+    parentId: null,
     kind: "event",
     completed: false,
     durationMinutes: null,

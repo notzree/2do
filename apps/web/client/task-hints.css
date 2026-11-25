@@ -1,0 +1,270 @@
+.ProseMirror .embedded.taskRef,
+.day-sheet .outline .task-row,
+.outline .task-row {
+  position: relative;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-height: 2.25rem;
+  padding: 0.36rem 0.55rem;
+  margin-inline: -.55rem;
+  border: 0;
+  border-radius: 0.3rem;
+}
+.embedded.taskRef .embed-grip,
+.task-row .fold,
+.task-row .fold-space {
+  position: absolute;
+  inset-inline-start: -1.05rem;
+  top: 0.44rem;
+  width: 1.05rem;
+}
+.embedded.taskRef .embed-grip {
+  opacity: 0;
+}
+.embedded.taskRef:hover .embed-grip,
+.embedded.taskRef:focus-within .embed-grip,
+.embedded.taskRef[data-selected] .embed-grip {
+  opacity: 0.75;
+}
+.embedded.taskRef > input[type="checkbox"],
+.task-row > input[type="checkbox"] {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  border: 1px solid color-mix(in srgb, var(--muted) 72%, transparent);
+  border-radius: .26rem;
+  background: transparent;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.23rem 0 0;
+  flex: none;
+}
+.embedded.taskRef > input[type="checkbox"]:checked, .task-row > input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.embedded.taskRef > input[type="checkbox"]:checked::after, .task-row > input[type="checkbox"]:checked::after {
+  content: ""; width: .47rem; height: .24rem;
+  border: solid var(--paper); border-width: 0 0 1.6px 1.6px;
+  transform: translateY(-.04rem) rotate(-45deg);
+}
+@media (forced-colors: active) {
+  .embedded.taskRef > input[type="checkbox"], .task-row > input[type="checkbox"] { appearance: auto; }
+  .embedded.taskRef > input[type="checkbox"]::after, .task-row > input[type="checkbox"]::after { display: none; }
+}
+:where(.notebook-main:not(:has(.ProseMirror:focus [data-node-selected]))) :is(.embedded.taskRef, .task-row)[data-selected],
+:is(.embedded.taskRef, .task-row):focus-within,
+.ProseMirror:focus .embedded.taskRef[data-node-selected] {
+  background: color-mix(in srgb, var(--accent) 7%, var(--paper));
+}
+:where(.notebook-main:not(:has(.ProseMirror:focus [data-node-selected]))) :is(.embedded.taskRef, .task-row)[data-selected]::before,
+:is(.embedded.taskRef, .task-row):focus-within::before,
+.ProseMirror:focus .embedded.taskRef[data-node-selected]::before {
+  content: "";
+  position: absolute;
+  inset: 0.28rem auto 0.28rem 0;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 1rem;
+}
+.ProseMirror-selectednode:has(.embedded.taskRef),
+.embedded.taskRef.ProseMirror-selectednode {
+  outline: none;
+}
+.embed-copy,
+.task-copy {
+  flex: 1;
+  min-width: 0;
+}
+.pending-title {
+  color: var(--muted);
+}
+.task-hints {
+  color: var(--muted);
+  font:
+    0.8rem/1.5 "DM Sans",
+    system-ui,
+    sans-serif;
+  white-space: normal;
+}
+.hint-heading,
+.hint-tags,
+.hint-context,
+.hint-actions,
+.hint-caption {
+  display: flex;
+  align-items: center;
+}
+.hint-heading {
+  gap: 0.55rem;
+  justify-content: space-between;
+  min-height: 1.5rem;
+}
+.hint-heading > :is(.embed-title, .task-title) {
+  min-width: 0;
+  min-height: 1.5rem;
+  text-align: start;
+  padding: 0;
+  font-size: 0.99rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.hint-heading > .done,
+.completed .hint-heading > .task-title {
+  color: var(--muted);
+}
+.hint-tags {
+  justify-content: flex-end;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  max-width: 48%;
+}
+.hint-tags button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.hint-tags .hint-chip {
+  gap: 0.28rem;
+  min-height: 1.35rem;
+  padding: 0.03rem 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: 0.26rem;
+  background: transparent;
+  color: var(--accent);
+  font:
+    500 0.7rem/1.4 "DM Sans",
+    system-ui,
+    sans-serif;
+}
+.hint-tags .hint-inspect,
+.hint-context button,
+.hint-caption button {
+  min-height: 1.4rem;
+  padding: 0.06rem 0.22rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+}
+.hint-tags .hint-inspect {
+  opacity: 0;
+}
+:is(.embedded.taskRef, .task-row):is(:hover, :focus-within, [data-selected]) .hint-inspect,
+.hint-tags .hint-inspect:focus-visible {
+  opacity: 1;
+}
+.hint-context {
+  flex-wrap: wrap;
+  gap: 0.18rem 0.5rem;
+  margin-top: 0.14rem;
+  font-size: 0.77rem;
+}
+.hint-context > * + *::before {
+  content: "·";
+  color: var(--muted);
+  margin-inline-end: 0.5rem;
+}
+.hint-context .hint-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: var(--accent);
+  padding-inline-start: 0;
+}
+.hint-toggle[aria-expanded="true"] svg:last-child {
+  transform: rotate(180deg);
+}
+.hint-context .hint-failed {
+  color: var(--warn);
+  text-decoration: underline;
+}
+.hint-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.hint-body {
+  margin: 0.55rem 0 0.06rem;
+  padding: 0.2rem 0 0.1rem 0.75rem;
+  border-inline-start: 1px solid var(--line);
+}
+.hint-caption {
+  justify-content: space-between;
+  color: var(--muted);
+  font:
+    0.64rem/1.5 "IBM Plex Mono",
+    ui-monospace,
+    monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.hint-caption button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.hint-actions {
+  flex-wrap: wrap;
+  gap: 0.24rem 0.5rem;
+  margin-block: 0.23rem;
+}
+.hint-actions > span:first-child {
+  flex: 1;
+}
+.hint-actions button {
+  min-height: 1.7rem;
+  font-size: 0.75rem;
+  padding: 0.12rem 0.45rem;
+}
+.hint-actions [role="alert"] {
+  flex-basis: 100%;
+  color: var(--danger);
+}
+.task-hints .subtype-card {
+  max-width: 30rem;
+  margin: 0.35rem 0;
+}
+.task-hints .editor :is(input, textarea) {
+  width: 100%;
+  height: auto;
+  text-align: start;
+}
+.hint-status {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+@media (hover: none) {
+  .hint-tags .hint-inspect {
+    opacity: 1;
+  }
+}
+@media (max-width: 35rem) {
+  .hint-heading {
+    flex-wrap: wrap;
+    gap: 0.18rem 0.4rem;
+  }
+  .hint-tags {
+    max-width: 100%;
+  }
+  .hint-tags .hint-chip,
+  .hint-actions button,
+  .hint-context button {
+    min-height: 1.75rem;
+  }
+}
+.hint-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.hint-pending > span {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+}

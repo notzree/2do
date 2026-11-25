@@ -1,7 +1,7 @@
 {
 	"id": "/",
-	"name": "2do · Personal planner",
-	"short_name": "2do",
+	"name": "twodo · Personal planner",
+	"short_name": "twodo",
 	"start_url": "/",
 	"display": "standalone",
 	"theme_color": "#173e36",

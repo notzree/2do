@@ -2,15 +2,19 @@
 import { z } from "zod";
 
 export const taskId = z.uuid();
-export const kind = z.enum(["task", "event", "meal", "milestone"]);
+export const kind = z.enum(["task", "event", "milestone"]);
 const interval = {
 	start: z.iso.datetime({ offset: true }),
 	end: z.iso.datetime({ offset: true }),
 };
+export const fixedSchedule = z.strictObject({ type: z.literal("fixed"), ...interval })
+	.refine((s) => Date.parse(s.end) > Date.parse(s.start), {
+		message: "The end of an interval must follow its start.",
+	});
 export const schedule = z
 	.discriminatedUnion("type", [
 		z.strictObject({ type: z.literal("day"), date: z.iso.date() }),
-		z.strictObject({ type: z.literal("fixed"), ...interval }),
+		fixedSchedule,
 		z.strictObject({ type: z.literal("window"), ...interval }),
 	])
 	.refine((s) => s.type === "day" || Date.parse(s.end) > Date.parse(s.start), {
@@ -25,10 +29,11 @@ const fields = {
 	schedule: schedule.nullable(),
 	durationMinutes: z.int().positive().max(525600).nullable(),
 };
+const revision = z.int().nonnegative();
 export const task = z.strictObject({
 	id: taskId,
+	revision,
 	...fields,
-	parentId: fields.parentId.default(null),
 });
 export const placement = z.strictObject({ side: z.enum(["before", "after"]), anchor: taskId });
 export const createTask = z.strictObject({
@@ -44,10 +49,36 @@ export const createTask = z.strictObject({
 export const patchTask = z
 	.strictObject(fields)
 	.partial()
-	.refine((p) => Object.keys(p).length > 0, {
+	.extend({ revision: revision.describe("Task revision from the most recent read") })
+	.refine((p) => Object.keys(p).length > 1, {
 		message: "Provide at least one field to update.",
 	})
-	.meta({ minProperties: 1 });
+	.meta({ minProperties: 2 });
+
+export const taskSearch = z.strictObject({
+	title: z.string().trim().min(1).max(240).optional(),
+	completed: z.boolean().optional(),
+	date: z.iso
+		.date()
+		.optional()
+		.describe(
+			"Match floating tasks on this calendar day. Combine with an interval to also match timed commitments.",
+		),
+	interval: z
+		.strictObject(interval)
+		.refine((s) => Date.parse(s.end) > Date.parse(s.start))
+		.optional()
+		.describe(
+			"Match fixed times and windows overlapping this half-open interval. Use the local midnight offsets for a calendar day.",
+		),
+	after: taskId.optional().describe("Cursor from the previous result"),
+	limit: z.int().min(1).max(50).default(20),
+});
+export const taskSearchResult = z.strictObject({
+	tasks: z.array(task),
+	nextCursor: taskId.nullable(),
+});
+export type TaskSearch = z.infer<typeof taskSearch>;
 export const edge = z
 	.strictObject({ from: taskId, to: taskId })
 	.describe("from must finish before to starts");
@@ -58,7 +89,6 @@ export const plan = z.strictObject({
 });
 export const direction = z.enum(["ancestors", "descendants"]);
 export type Task = z.infer<typeof task>;
-export type TaskKind = z.infer<typeof kind>;
 export type CreateTask = z.infer<typeof createTask>;
 export type PatchTask = z.infer<typeof patchTask>;
 export type Edge = z.infer<typeof edge>;

@@ -8,13 +8,18 @@
 		"deploy": "vp build && wrangler deploy --var ACCESS_ISSUER:\"$ACCESS_ISSUER\" --var ACCESS_AUD:\"$ACCESS_AUD\"",
 		"format": "vp fmt",
 		"test": "vp test",
-		"typecheck": "wrangler types && tsc -p tsconfig.json"
+		"typecheck": "wrangler types && tsc -p tsconfig.json",
+		"db:generate": "drizzle-kit generate",
+		"eval:meal": "node evals/meal.mjs",
+		"eval:copilot": "vp build && node evals/copilot.mjs"
 	},
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "^1.39.2",
 		"@cloudflare/vitest-plugin": "^1.8.3",
+		"@flue/sdk": "^2.3.1",
 		"@flue/vite": "^2.3.1",
 		"@modelcontextprotocol/client": "2.0.0",
+		"drizzle-kit": "^0.31.11",
 		"typescript": "^7.0.2",
 		"vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
 		"vite-plus": "1.4.0",
@@ -26,13 +31,18 @@
 	"dependencies": {
 		"@cfworker/json-schema": "4.1.6",
 		"@flue/runtime": "^2.3.1",
+		"@hono/zod-openapi": "^1.6.3",
 		"@modelcontextprotocol/server": "2.0.0",
+		"drizzle-orm": "^0.45.4",
 		"hono": "^4.13.13",
 		"jose": "^6.2.12",
 		"zod": "^4.6.7"
 	},
 	"exports": {
 		"./notebook": "./src/interfaces/notebook.ts",
-		"./plan": "./src/interfaces/plan.ts"
+		"./plan": "./src/interfaces/plan.ts",
+		"./task-plugins": "./src/interfaces/task-plugins.ts",
+		"./task-summaries": "./src/interfaces/task-summaries.ts",
+		"./chats": "./src/interfaces/chats.ts"
 	}
 }

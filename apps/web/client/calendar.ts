@@ -17,10 +17,17 @@ export function onDay(task: Task, day: Date) {
 	const next = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
 	return Date.parse(s.start) < +next && Date.parse(s.end) > +start;
 }
+function monthOffset(date: Date, weekStart: WeekStart) {
+	const first = new Date(date.getFullYear(), date.getMonth(), 1);
+	return (first.getDay() - weekStart + 7) % 7;
+}
+export function weekOfMonth(date: Date, weekStart: WeekStart) {
+	return 1 + Math.floor((monthOffset(date, weekStart) + date.getDate() - 1) / 7);
+}
 export function monthDays(date: Date, weekStart: WeekStart = 0) {
 	const year = date.getFullYear(),
 		month = date.getMonth();
-	const offset = (new Date(year, month, 1).getDay() - weekStart + 7) % 7;
+	const offset = monthOffset(date, weekStart);
 	const count = new Date(year, month + 1, 0).getDate();
 	return Array.from(
 		{ length: Math.ceil((count + offset) / 7) * 7 },
@@ -28,7 +35,7 @@ export function monthDays(date: Date, weekStart: WeekStart = 0) {
 	);
 }
 
-export const views = ["day", "week", "calendar"] as const;
+export const views = ["week", "calendar"] as const;
 export type View = (typeof views)[number];
 export const formatDate = (date: Date, options: Intl.DateTimeFormatOptions) =>
 	date.toLocaleDateString(undefined, options);
@@ -36,6 +43,29 @@ export const fullDate = (date: Date) =>
 	formatDate(date, { weekday: "long", month: "long", day: "numeric" });
 export function offsetDay(date: Date, offset: number) {
 	return new Date(date.getFullYear(), date.getMonth(), date.getDate() + offset);
+}
+export const nextPeriods = {
+	nextDay: "Next day",
+	nextWeek: "Next week",
+	nextMonth: "Next month",
+} as const;
+export type NextPeriod = keyof typeof nextPeriods;
+export const previousPeriods = {
+	previousDay: "Previous day",
+	previousWeek: "Previous week",
+	previousMonth: "Previous month",
+} as const;
+export type PreviousPeriod = keyof typeof previousPeriods;
+export function nextDate(date: Date, period: NextPeriod) {
+	if (period !== "nextMonth") return offsetDay(date, period === "nextWeek" ? 7 : 1);
+	const lastDay = new Date(date.getFullYear(), date.getMonth() + 2, 0);
+	return new Date(lastDay.getFullYear(), lastDay.getMonth(), Math.min(date.getDate(), lastDay.getDate()));
+}
+export function previousDate(date: Date, period: PreviousPeriod) {
+	if (period === "previousDay") return offsetDay(date, -1);
+	if (period === "previousWeek") return offsetDay(date, -7);
+	const lastDay = new Date(date.getFullYear(), date.getMonth(), 0);
+	return new Date(lastDay.getFullYear(), lastDay.getMonth(), Math.min(date.getDate(), lastDay.getDate()));
 }
 export function startOfWeek(date: Date, weekStart: WeekStart = 0) {
 	return offsetDay(date, -((date.getDay() - weekStart + 7) % 7));
@@ -55,4 +85,9 @@ export function timeRange(task: Task) {
 			? fmt(end)
 			: formatDate(end, { month: "short", day: "numeric" }) + " " + fmt(end);
 	return (s.type === "window" ? "Available " : "") + fmt(start) + "–" + endLabel;
+}
+
+/** Chronological start in local time, including date-only entries at local midnight. */
+export function scheduleStart(schedule: NonNullable<Task["schedule"]>) {
+	return new Date(schedule.type === "day" ? schedule.date + "T00:00:00" : schedule.start);
 }

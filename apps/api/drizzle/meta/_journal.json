@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1795557398378,
+      "tag": "0000_planner",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795560126399,
+      "tag": "0001_notebook_capture",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795560631729,
+      "tag": "0002_classification_input",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795561249154,
+      "tag": "0003_classification_result",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795561387662,
+      "tag": "0004_time_proposals",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1795562088692,
+      "tag": "0005_capture_classification_source",
+      "breakpoints": true
+    }
+  ]
+}

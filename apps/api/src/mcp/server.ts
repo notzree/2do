@@ -41,8 +41,12 @@ export function plannerMcpHandler(dispatch: (request: Request) => Promise<Respon
 			const path = route.pathTemplate.replace(/\{(\w+)\}/g, (_, key: string) =>
 				encodeURIComponent(String(args[key])),
 			);
+			const url = new URL("https://planner.internal" + path);
+			for (const key of route.queryParameters ?? []) {
+				if (args[key] !== undefined) url.searchParams.set(key, String(args[key]));
+			}
 			const response = await dispatch(
-				new Request("https://planner.internal" + path, {
+				new Request(url, {
 					method: route.method,
 					...(route.requestBodyContentType && {
 						headers: { "Content-Type": route.requestBodyContentType },

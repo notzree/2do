@@ -14,7 +14,7 @@ it("round-trips saved notebook content through the Tiptap schema", () => {
 			{ type: "image", attrs: { id: "a".repeat(64), alt: "sketch" } },
 		],
 	});
-	const schema = getSchema(editorExtensions(() => {}));
+	const schema = getSchema(editorExtensions());
 
 	expect(notebookDoc.parse(schema.nodeFromJSON(saved).toJSON())).toEqual(saved);
 });

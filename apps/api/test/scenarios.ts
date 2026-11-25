@@ -20,6 +20,10 @@ export async function checkPlanner(env: Env) {
 		assert.equal(response.status, 201);
 		return task.parse(await response.json()).id;
 	};
+	const patch = async (id: string, changes: object) => {
+		const current = task.parse(await (await call("tasks/" + id)).json());
+		return call("tasks/" + id, "PATCH", { revision: current.revision, ...changes });
+	};
 	const edge = (from: string, to: string, method = "PUT") =>
 		call("dependencies/" + from + "/" + to, method);
 	const reach = async (id: string, direction: string) =>
@@ -60,18 +64,18 @@ export async function checkPlanner(env: Env) {
 	for (const e of snapshot.edges) assert.ok(order.indexOf(e.from) < order.indexOf(e.to));
 	assert.equal((await edge(b, c)).status, 409);
 	assert.equal((await bob.fetch(base + "tasks/" + a)).status, 404);
-	assert.equal((await call("tasks/" + b, "PATCH", { completed: true, kind: "meal" })).status, 200);
+	assert.equal((await patch(b, { completed: true, kind: "event" })).status, 200);
 	assert.equal(task.parse(await (await call("tasks/" + b)).json()).completed, true);
 	assert.equal(
 		(
-			await call("tasks/" + b, "PATCH", {
+			await patch(b, {
 				schedule: { type: "fixed", start: "2026-03-01T23:00:00Z", end: "2026-03-01T18:00:00Z" },
 			})
 		).status,
 		400,
 	);
-	assert.equal((await call("tasks/" + b, "PATCH", { bogus: true })).status, 400);
-	assert.equal((await call("tasks/" + b, "PATCH", {})).status, 400);
+	assert.equal((await patch(b, { bogus: true })).status, 400);
+	assert.equal((await patch(b, {})).status, 400);
 	assert.equal((await call("tasks", "POST", { title: "   " })).status, 400);
 	assert.equal((await call("tasks", "POST", { title: "duplicate", id: b })).status, 409);
 	assert.equal((await edge(c, middle, "DELETE")).status, 204);
@@ -80,12 +84,9 @@ export async function checkPlanner(env: Env) {
 	assert.equal((await call("tasks/" + middle)).status, 404);
 
 	const child = await create("Pack lunch");
-	assert.equal((await call("tasks/" + child, "PATCH", { parentId: a })).status, 200);
-	assert.equal((await call("tasks/" + a, "PATCH", { parentId: child })).status, 409);
-	assert.equal(
-		(await call("tasks/" + child, "PATCH", { parentId: crypto.randomUUID() })).status,
-		404,
-	);
+	assert.equal((await patch(child, { parentId: a })).status, 200);
+	assert.equal((await patch(a, { parentId: child })).status, 409);
+	assert.equal((await patch(child, { parentId: crypto.randomUUID() })).status, 404);
 	assert.equal((await call("tasks/" + a, "DELETE")).status, 204);
 	assert.equal(task.parse(await (await call("tasks/" + child)).json()).parentId, null);
 

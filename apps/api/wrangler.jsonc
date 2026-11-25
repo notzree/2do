@@ -5,10 +5,10 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"workers_dev": false,
 	"preview_urls": false,
-	// Workers Traces shows each Copilot response as a trace with agent-level spans.
+	// Workers Traces shows each agent response as a trace with agent-level spans.
 	"observability": { "enabled": true, "traces": { "enabled": true } },
-	// The Copilot agent runs keyless on Workers AI through this binding.
-	"ai": { "binding": "AI" },
+	// Local development calls Workers AI on the signed-in Cloudflare account.
+	"ai": { "binding": "AI", "remote": true },
 	// Deployment values for the Access vars are supplied with
 	// `wrangler deploy --var ACCESS_ISSUER:... --var ACCESS_AUD:...`
 	// (see the deploy script). Local development overrides LOCAL_PLANNER
@@ -16,7 +16,8 @@
 	"vars": {
 		"ACCESS_ISSUER": "",
 		"ACCESS_AUD": "",
-		"LOCAL_PLANNER": "disabled"
+		"LOCAL_PLANNER": "disabled",
+		"TASK_CLASSIFICATION_BATCH_SIZE": "8"
 	},
 	"r2_buckets": [{ "binding": "NOTEBOOK_IMAGES", "bucket_name": "2do-notebook-images" }],
 	"durable_objects": {

@@ -1,45 +1,47 @@
 import { useState, type MouseEvent } from "react";
 import {
-  BookOpen,
   CalendarDays,
   Columns3,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  NotebookPen,
   ChevronRight,
+  Inbox,
 } from "lucide-react";
-import { dayKey, formatDate, offsetDay, type View } from "./calendar.ts";
+import { dayKey, formatDate, type View } from "./calendar.ts";
 import type { Preferences } from "./preferences.ts";
+import { NotebookBrand } from "./notebook-brand.tsx";
 
 const nav = [
-  { view: "day", title: "Daybook", Icon: BookOpen },
   { view: "week", title: "Week", Icon: Columns3 },
-  { view: "calendar", title: "Calendar", Icon: CalendarDays },
+  { view: "calendar", title: "Month", Icon: CalendarDays },
 ] as const;
 
 type Props = {
   view: View;
   date: Date;
-  firstDay: Date;
-  go: (view: View, date: Date) => void;
+  days: Date[];
+  go: (view: View, date: Date, focused?: boolean) => void;
   settings: boolean;
   settingsHref: string;
   openSettings: () => void;
   prefs: Preferences;
+  reviewOpen: boolean;
+  pendingReview: number;
+  review: () => void;
 };
 export function Sidebar({
   view,
   date,
-  firstDay,
+  days,
   go,
   settings,
   settingsHref,
   openSettings,
   prefs,
+  reviewOpen, pendingReview, review,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const count = view === "day" ? 3 : view === "week" ? 7 : 1;
   function navigate(event: MouseEvent<HTMLAnchorElement>, action: () => void) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -52,7 +54,7 @@ export function Sidebar({
         <button aria-label="Toggle sidebar" aria-expanded={open} onClick={() => setOpen(!open)}>
           <PanelLeftOpen size={19} />
         </button>
-        <strong>2do.</strong>
+        <NotebookBrand />
       </div>
       {open && (
         <button
@@ -66,11 +68,9 @@ export function Sidebar({
         aria-label="Notebook sidebar"
       >
         <div className="brand-row">
-          <a className="notebook-brand" href="/app/day">
-            <span>
-              <NotebookPen size={21} strokeWidth={1.7} />
-            </span>
-            2do<span className="brand-stop">.</span>
+          <a className="brand-link" href={`/app/week?date=${dayKey(date)}`}
+            onClick={(event) => navigate(event, () => go("week", date))}>
+            <NotebookBrand />
           </a>
           <button
             className="mobile-close"
@@ -93,14 +93,24 @@ export function Sidebar({
               {prefs.keysEnabled && <kbd>g {prefs.bindings[v]}</kbd>}
             </a>
           ))}
+          <button type="button" className="review-link" aria-pressed={reviewOpen}
+            onClick={() => { setOpen(false); review(); }}>
+            <Inbox size={17} /> Review {pendingReview > 0 && <span aria-label={pendingReview + " pending"}>{pendingReview}</span>}
+          </button>
         </nav>
         {!settings && (
           <div className="contents">
-            <h2>On this page</h2>
-            {Array.from({ length: count }, (_, i) => offsetDay(firstDay, i)).map((d) => (
+            <h2>{view === "calendar" ? "Selected day" : "On this page"}</h2>
+            {days.map((d) => (
               <button
                 key={dayKey(d)}
+                aria-current={dayKey(d) === dayKey(date) ? "date" : undefined}
                 onClick={() => {
+                  if (view === "calendar") {
+                    go("week", d, true);
+                    setOpen(false);
+                    return;
+                  }
                   const el = document.getElementById("day-" + dayKey(d));
                   el?.scrollIntoView({ block: "start" });
                   el?.querySelector<HTMLElement>(".ProseMirror")?.focus({ preventScroll: true });
