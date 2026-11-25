@@ -1,28 +1,125 @@
 import { DurableObject } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/durable-sqlite";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
+import migrations from "../drizzle/migrations.js";
+import { ClefTaskClassifier } from "./classifiers/clef.ts";
+import { Notebook } from "./core/notebook.ts";
 import { Planner } from "./core/planner.ts";
+import { TaskClassification } from "./core/task-classification.ts";
+import { TaskPlugins } from "./core/task-plugins.ts";
+import { TaskSummaries } from "./core/task-summaries.ts";
+import { Review } from "./core/review.ts";
 import { SqlitePlannerDatabase } from "./db/planner.ts";
+import { sideChats, taskCaptures } from "./db/schema.ts";
+import { SqliteTaskPluginDatabase } from "./db/task-plugins.ts";
+import type { CommitTaskWrite } from "./interfaces/database.ts";
+import type { TaskClassifier } from "./interfaces/task-classifier.ts";
+import { plannerScopeHeader } from "./interfaces/notebook.ts";
 import { plannerMcpHandler } from "./mcp/server.ts";
+import { nutritionPlugin } from "./plugins/meal.ts";
+import { chatRoutes } from "./routes/chats.ts";
+import { imageRoutes } from "./routes/images.ts";
 import { notebookRoutes } from "./routes/notebook.ts";
+import { plannerApi } from "./routes/planner-api.ts";
 import { plannerRoutes } from "./routes/tasks.ts";
+import { taskSummaryRoutes } from "./routes/task-summaries.ts";
+import { reviewRoutes, type PlannerCaller } from "./routes/review.ts";
 
 export class UserPlanner extends DurableObject<Env> {
-	private readonly planner = new Planner(new SqlitePlannerDatabase(this.ctx.storage));
-	private readonly routes = plannerRoutes(this.planner);
-	private readonly notebook = notebookRoutes(this.ctx, this.env.NOTEBOOK_IMAGES, this.planner);
+	private readonly store = drizzle(this.ctx.storage);
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(ctx, env);
+		ctx.blockConcurrencyWhile(async () => {
+			await migrate(this.store, migrations);
+			// A cold start may precede delivery of an existing alarm or its platform retry.
+			if (this.classification && await this.ctx.storage.getAlarm() === null) {
+				const due = this.pluginDb.nextDue();
+				if (due !== null) await this.ctx.storage.setAlarm(due);
+			}
+		});
+	}
+	private readonly db = new SqlitePlannerDatabase(this.store);
+	private readonly pluginDb = new SqliteTaskPluginDatabase(this.store);
+	private readonly plugins = new TaskPlugins(this.db, this.pluginDb, [nutritionPlugin]);
+	private readonly classifier = this.createClassifier();
+	private readonly classification =
+		this.classifier &&
+		new TaskClassification(this.db, this.plugins, this.classifier, this.classificationBatchSize());
+	private readonly planner = new Planner(this.db, (task, previous, rawInput) => {
+		if (task.title === previous?.title) return;
+		if (previous)
+			this.store
+				.update(taskCaptures)
+				.set({ currentInput: false })
+				.where(eq(taskCaptures.taskId, task.id))
+				.run();
+		if (this.classification) this.classification.enqueue(task, Date.now(), rawInput);
+		else if (previous) this.pluginDb.supersedeCaptureInput(task.id);
+	});
+	private readonly commitTaskWrite: CommitTaskWrite = async (write) => {
+		if (!this.classification) return write();
+		return this.ctx.storage.transaction(async (txn) => {
+			const armed = await txn.getAlarm();
+			const result = write();
+			const due = this.pluginDb.nextDue();
+			if (due !== armed) {
+				if (due === null) await txn.deleteAlarm();
+				else await txn.setAlarm(due);
+			}
+			return result;
+		});
+	};
+	private readonly routes = plannerApi<PlannerCaller>()
+		.route("/", reviewRoutes(new Review(this.store, this.planner)))
+		.route("/", taskSummaryRoutes(new TaskSummaries(this.store, this.plugins)))
+		.route(
+			"/",
+			plannerRoutes(this.planner, this.plugins, this.commitTaskWrite, this.classification),
+		)
+		.route("/", chatRoutes(this.store))
+		.route(
+			"/",
+			notebookRoutes(new Notebook(this.store, this.planner, this.commitTaskWrite, this.plugins)),
+		)
+		.route("/", imageRoutes(this.ctx.id.toString(), this.store, this.env.NOTEBOOK_IMAGES));
+	private readonly mcp = plannerMcpHandler(async (request) =>
+		this.routes.fetch(request, { fromAgent: true }),
+	);
 
-	private readonly mcp = plannerMcpHandler((request) => this.api(request));
-
-	fetch(request: Request) {
-		if (new URL(request.url).pathname === "/mcp") return this.mcp.fetch(request);
-		return this.api(request);
+	protected createClassifier(): TaskClassifier | undefined {
+		return this.env.AI ? ClefTaskClassifier.using(this.env.AI) : undefined;
 	}
 
-	private async api(request: Request) {
-		const path = new URL(request.url).pathname;
-		return (
-			path.startsWith("/api/days/") || path === "/api/images" || path.startsWith("/api/images/")
-				? this.notebook
-				: this.routes
-		).fetch(request);
+	private classificationBatchSize() {
+		const size = Number(this.env.TASK_CLASSIFICATION_BATCH_SIZE);
+		return Number.isInteger(size) && size >= 1 && size <= 64 ? size : 8;
+	}
+
+	async alarm() {
+		await this.classification?.processDue(this.commitTaskWrite);
+	}
+
+	hasSideChat(id: string) {
+		return !!this.store
+			.select({ id: sideChats.id })
+			.from(sideChats)
+			.where(eq(sideChats.id, id))
+			.get();
+	}
+
+	async fetch(request: Request) {
+		if (new URL(request.url).pathname === "/mcp") return this.mcp.fetch(request);
+		const scope = this.ctx.id.toString();
+		const expected = request.headers.get(plannerScopeHeader);
+		if (expected !== null && expected !== scope) {
+			return Response.json({ error: "This request belongs to a different planner. Reload to verify your account." }, {
+				status: 412, headers: { "Cache-Control": "no-store" },
+			});
+		}
+		const result = await this.routes.fetch(request);
+		const response = new Response(result.body, result);
+		response.headers.set(plannerScopeHeader, scope);
+		return response;
 	}
 }

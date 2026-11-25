@@ -1,0 +1,1 @@
+ALTER TABLE `task_classification` ADD `rawInput` text;

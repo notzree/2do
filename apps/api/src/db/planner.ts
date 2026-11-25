@@ -1,105 +1,153 @@
+import { and, eq, gt, or, sql } from "drizzle-orm";
+import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import type { PlannerDatabase } from "../interfaces/database.ts";
-import { task, type Direction, type Edge, type Task } from "../interfaces/plan.ts";
+import { withoutTaskReferences, type DeleteTaskReceipt } from "../interfaces/notebook.ts";
+import { task, type Direction, type Edge, type Task, type TaskSearch } from "../interfaces/plan.ts";
+import { days, dependency, planHead, tasks } from "./schema.ts";
+
+export type PlannerStore = DrizzleSqliteDODatabase;
 
 export class SqlitePlannerDatabase implements PlannerDatabase {
-	private readonly sql: SqlStorage;
-	private readonly storage: DurableObjectStorage;
-
-	constructor(storage: DurableObjectStorage) {
-		this.storage = storage;
-		this.sql = storage.sql;
-		this.transaction(() => {
-			this.sql.exec(`CREATE TABLE IF NOT EXISTS plan_head (
-				singleton INTEGER PRIMARY KEY CHECK(singleton = 1), revision INTEGER NOT NULL
-			);
-			INSERT OR IGNORE INTO plan_head VALUES (1, 0);
-			CREATE TABLE IF NOT EXISTS task (
-				id TEXT PRIMARY KEY NOT NULL, document TEXT NOT NULL
-			);
-			CREATE TABLE IF NOT EXISTS dependency (
-				prerequisite TEXT NOT NULL REFERENCES task(id) ON DELETE CASCADE,
-				dependent TEXT NOT NULL REFERENCES task(id) ON DELETE CASCADE,
-				PRIMARY KEY(prerequisite, dependent), CHECK(prerequisite <> dependent)
-			);
-			CREATE INDEX IF NOT EXISTS by_dependent ON dependency(dependent, prerequisite);`);
-		});
-	}
+	constructor(private readonly db: PlannerStore) {}
 
 	transaction<T>(write: () => T): T {
-		return this.storage.transactionSync(write);
+		return this.db.transaction(write);
 	}
 	revision() {
-		return this.sql
-			.exec<{ revision: number }>("SELECT revision FROM plan_head WHERE singleton = 1")
-			.one().revision;
+		return this.db.select().from(planHead).get()!.revision;
 	}
 	advanceRevision() {
-		this.sql.exec("UPDATE plan_head SET revision = revision + 1 WHERE singleton = 1");
+		this.db
+			.update(planHead)
+			.set({ revision: sql`${planHead.revision} + 1` })
+			.run();
 	}
 	tasks() {
-		return this.sql
-			.exec<{ document: string }>("SELECT document FROM task ORDER BY id")
-			.toArray()
-			.map((row) => task.parse(JSON.parse(row.document)));
+		return this.db
+			.select()
+			.from(tasks)
+			.orderBy(tasks.id)
+			.all()
+			.map((row) => task.parse(row.document));
+	}
+	children(id: string) {
+		return this.db
+			.select({ document: tasks.document })
+			.from(tasks)
+			.where(eq(tasks.parentId, id))
+			.all()
+			.map((row) => task.parse(row.document));
+	}
+	search({ title, completed, date, interval, after, limit }: TaskSearch) {
+		const doc = tasks.document;
+		const rows = this.db
+			.select({ document: doc })
+			.from(tasks)
+			.where(
+				and(
+					after === undefined ? undefined : gt(tasks.id, after),
+					title === undefined
+						? undefined
+						: sql`instr(lower(json_extract(${doc}, '$.title')), lower(${title})) > 0`,
+					completed === undefined
+						? undefined
+						: sql`json_extract(${doc}, '$.completed') = ${Number(completed)}`,
+					or(
+						date === undefined ? undefined : sql`json_extract(${doc}, '$.schedule.date') = ${date}`,
+						interval &&
+							sql`julianday(json_extract(${doc}, '$.schedule.start')) < julianday(${interval.end})
+					AND julianday(json_extract(${doc}, '$.schedule.end')) > julianday(${interval.start})`,
+					),
+				),
+			)
+			.orderBy(tasks.id)
+			.limit(limit + 1)
+			.all();
+		const page = rows.slice(0, limit).map((row) => task.parse(row.document));
+		return { tasks: page, nextCursor: rows.length > limit ? page[page.length - 1].id : null };
 	}
 	task(id: string) {
-		const [row] = this.sql.exec<{ document: string }>("SELECT document FROM task WHERE id = ?", id);
-		return row && task.parse(JSON.parse(row.document));
+		const row = this.db.select().from(tasks).where(eq(tasks.id, id)).get();
+		return row && task.parse(row.document);
 	}
-	insert(value: Task) {
-		this.sql.exec("INSERT INTO task(id, document) VALUES (?, ?)", value.id, JSON.stringify(value));
+	insert(document: Task) {
+		this.db.insert(tasks).values({ id: document.id, document }).run();
 	}
-	update(value: Task) {
-		this.sql.exec("UPDATE task SET document = ? WHERE id = ?", JSON.stringify(value), value.id);
+	update(document: Task) {
+		this.db.update(tasks).set({ document }).where(eq(tasks.id, document.id)).run();
 	}
-	remove(id: string) {
-		this.sql.exec("DELETE FROM task WHERE id = ?", id);
+	remove(id: string): DeleteTaskReceipt {
+		// Keep only dates in memory; a day document can contain thousands of blocks.
+		const candidates = this.db
+			.select({ date: days.day })
+			.from(days)
+			.where(sql`exists (
+			select 1 from json_each(${days.document}, '$.content') as block
+			where json_extract(block.value, '$.attrs.id') = ${id}
+		)`)
+			.orderBy(days.day)
+			.all();
+		const pages: DeleteTaskReceipt["pages"] = [];
+		for (const { date } of candidates) {
+			const current = this.db.select().from(days).where(eq(days.day, date)).get()!;
+			const document = withoutTaskReferences(current.document, id);
+			if (document === current.document) continue;
+			const revision = current.revision + 1;
+			// Only a notebook save has a SHA-256 command hash eligible for replay.
+			this.db
+				.update(days)
+				.set({ document, revision, commandHash: "" })
+				.where(eq(days.day, date))
+				.run();
+			pages.push({ date, previousRevision: current.revision, revision });
+		}
+		this.db.delete(tasks).where(eq(tasks.id, id)).run();
+		return { pages };
 	}
 	edges() {
-		return this.sql
-			.exec<Edge>(
-				'SELECT prerequisite AS "from", dependent AS "to" FROM dependency ORDER BY prerequisite, dependent',
-			)
-			.toArray();
+		return this.db
+			.select({ from: dependency.prerequisite, to: dependency.dependent })
+			.from(dependency)
+			.orderBy(dependency.prerequisite, dependency.dependent)
+			.all();
 	}
 	private columns(direction: Direction) {
 		return direction === "descendants"
-			? (["prerequisite", "dependent"] as const)
-			: (["dependent", "prerequisite"] as const);
+			? ([dependency.prerequisite, dependency.dependent] as const)
+			: ([dependency.dependent, dependency.prerequisite] as const);
 	}
 	neighbors(id: string, direction: Direction) {
 		const [source, target] = this.columns(direction);
-		return this.sql
-			.exec<{ id: string }>(
-				`SELECT ${target} AS id FROM dependency WHERE ${source} = ? ORDER BY id`,
-				id,
-			)
-			.toArray()
-			.map((r) => r.id);
+		return this.db
+			.select({ id: target })
+			.from(dependency)
+			.where(eq(source, id))
+			.orderBy(target)
+			.all()
+			.map((row) => row.id);
 	}
 	reachable(id: string, direction: Direction) {
 		const [source, target] = this.columns(direction);
-		return this.sql
-			.exec<{ id: string }>(
-				`WITH RECURSIVE walk(id) AS (
-			SELECT ${target} FROM dependency WHERE ${source} = ?
-			UNION SELECT d.${target} FROM dependency d JOIN walk w ON d.${source} = w.id
-		) SELECT id FROM walk ORDER BY id`,
-				id,
-			)
-			.toArray()
-			.map((r) => r.id);
+		return this.db
+			.all<{ id: string }>(sql`WITH RECURSIVE walk(id) AS (
+			SELECT ${target} FROM ${dependency} WHERE ${source} = ${id}
+			UNION SELECT ${target} FROM ${dependency} JOIN walk ON ${source} = walk.id
+		) SELECT id FROM walk ORDER BY id`)
+			.map((row) => row.id);
 	}
 	link({ from, to }: Edge) {
-		return (
-			this.sql.exec("INSERT INTO dependency VALUES (?, ?) ON CONFLICT DO NOTHING", from, to)
-				.rowsWritten > 0
-		);
+		return !!this.db
+			.insert(dependency)
+			.values({ prerequisite: from, dependent: to })
+			.onConflictDoNothing()
+			.returning()
+			.get();
 	}
 	unlink({ from, to }: Edge) {
-		return (
-			this.sql.exec("DELETE FROM dependency WHERE prerequisite = ? AND dependent = ?", from, to)
-				.rowsWritten > 0
-		);
+		return !!this.db
+			.delete(dependency)
+			.where(and(eq(dependency.prerequisite, from), eq(dependency.dependent, to)))
+			.returning()
+			.get();
 	}
 }

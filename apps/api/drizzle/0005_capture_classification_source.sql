@@ -1,0 +1,1 @@
+ALTER TABLE `task_capture` ADD `currentInput` integer DEFAULT false NOT NULL;

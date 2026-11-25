@@ -7,6 +7,7 @@ import type {
 	Plan,
 	PlanReader,
 	Task,
+	TaskSearch,
 } from "../interfaces/plan.ts";
 
 export class PlannerError extends Error {
@@ -19,12 +20,18 @@ export class PlannerError extends Error {
 }
 
 export class Planner implements PlanReader {
-	constructor(private readonly db: PlannerDatabase) {}
+	constructor(
+		private readonly db: PlannerDatabase,
+		private readonly onTaskChanged?: (task: Task, previous?: Task, rawInput?: string) => void,
+	) {}
 
 	get(id: string): Task {
 		const task = this.db.task(id);
 		if (!task) throw new PlannerError(404, "Task not found");
 		return task;
+	}
+	search(input: TaskSearch) {
+		return this.db.search(input);
 	}
 	plan(): Plan {
 		const tasks = this.db.tasks();
@@ -60,11 +67,11 @@ export class Planner implements PlanReader {
 			ancestor = this.get(ancestor).parentId;
 		}
 	}
-	create(input: CreateTask): Task {
+	create(input: CreateTask, rawInput?: string): Task {
 		return this.db.transaction(() => {
 			const { placement, id = crypto.randomUUID(), ...fields } = input;
 			if (this.db.task(id)) throw new PlannerError(409, "Task ID already exists");
-			const task = { id, ...fields };
+			const task = { id, ...fields, revision: this.db.revision() + 1 };
 			this.checkParent(id, task.parentId);
 			this.db.insert(task);
 			if (placement) {
@@ -79,29 +86,41 @@ export class Planner implements PlanReader {
 				this.db.link(before ? { from: id, to: anchor } : { from: anchor, to: id });
 			}
 			this.db.advanceRevision();
+			this.onTaskChanged?.(task, undefined, rawInput);
 			return task;
 		});
 	}
 	update(id: string, patch: PatchTask) {
 		return this.db.transaction(() => {
-			const updated = { ...this.get(id), ...patch };
+			const previous = this.get(id);
+			if (patch.revision !== previous.revision)
+				throw new PlannerError(409, "This task changed. Read the latest task before saving.");
+			const updated = { ...previous, ...patch, revision: this.db.revision() + 1 };
 			if (patch.parentId !== undefined) this.checkParent(id, updated.parentId);
 			this.db.update(updated);
 			this.db.advanceRevision();
+			this.onTaskChanged?.(updated, previous);
 			return updated;
 		});
 	}
-	remove(id: string) {
-		this.db.transaction(() => {
-			const parent = this.get(id);
-			for (const child of this.db.tasks()) {
-				if (child.parentId === id) this.db.update({ ...child, parentId: parent.parentId });
+	remove(id: string, expectedRevision?: number) {
+		return this.db.transaction(() => {
+			const parent = this.db.task(id);
+			if (parent) {
+				if (expectedRevision !== undefined && expectedRevision !== parent.revision)
+					throw new PlannerError(409, "This task changed. Review the current task before deleting it.");
+				const revision = this.db.revision() + 1;
+				for (const child of this.db.children(id)) {
+					this.db.update({ ...child, parentId: parent.parentId, revision });
+				}
+				this.db.advanceRevision();
 			}
-			this.db.remove(id);
-			this.db.advanceRevision();
+			const receipt = this.db.remove(id);
+			if (!parent && !receipt.pages.length) throw new PlannerError(404, "Task not found");
+			return receipt;
 		});
 	}
-	setDependency(edge: Edge, present: boolean) {
+	setDependency(edge: Edge, present: boolean, expectedRevision?: number) {
 		this.db.transaction(() => {
 			this.get(edge.from);
 			this.get(edge.to);
@@ -112,7 +131,10 @@ export class Planner implements PlanReader {
 				throw new PlannerError(409, "This dependency would create a cycle");
 			}
 			const changed = present ? this.db.link(edge) : this.db.unlink(edge);
-			if (changed) this.db.advanceRevision();
+			if (!changed) return;
+			if (expectedRevision !== undefined && expectedRevision !== this.db.revision())
+				throw new PlannerError(409, "The plan changed. Review its dependencies before saving.");
+			this.db.advanceRevision();
 		});
 	}
 }

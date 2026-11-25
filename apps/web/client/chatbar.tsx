@@ -1,178 +1,345 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import * as Menu from "@radix-ui/react-dropdown-menu";
+import { useFlueAgent } from "@flue/react";
 import {
-	createFlueClient,
-	type FlueConversationMessage,
-	type FlueConversationSettlement,
-	type FlueConversationPart,
-} from "@flue/sdk";
-import { MessageCircle, Square, X } from "lucide-react";
+	ArrowUp,
+	Check,
+	ChevronDown,
+	CornerDownLeft,
+	History,
+	ListChecks,
+	MessageCircle,
+	NotebookPen,
+	Square,
+	SquarePen,
+	Sun,
+	X,
+} from "lucide-react";
+import {
+	chatClient,
+	chatsQuery,
+	emptyComposer,
+	newSideChat,
+	selectChat,
+	sendChat,
+	setChatError,
+	setDraft,
+	useChats,
+} from "./chats.ts";
+import { ChatTranscript } from "./chat-transcript.tsx";
+import "./chatbar.css";
 
-// One conversation per signed-in user. The "me" alias is rewritten to the
-// caller's verified identity by the API worker, so this client never needs
-// to know — or guess — who is signed in.
-const client = createFlueClient({ url: "/api/agents/copilot/me" });
-
-function textOf(message: FlueConversationMessage) {
-	return message.parts
-		.filter((part): part is Extract<FlueConversationPart, { type: "text" }> => part.type === "text")
-		.map((part) => part.text)
-		.join("");
-}
-
-function ToolChips({ message }: { message: FlueConversationMessage }) {
-	const tools = message.parts.filter(
-		(part): part is Extract<FlueConversationPart, { type: "dynamic-tool" }> =>
-			part.type === "dynamic-tool",
-	);
-	if (!tools.length) return null;
+function AgentMark() {
 	return (
-		<span className="copilot-tools">
-			{tools.map((tool) => (
-				<span key={tool.toolCallId} className="copilot-tool">
-					{tool.toolName}
-					{tool.state === "input-available" ? "…" : tool.state === "output-error" ? " ✕" : ""}
-				</span>
-			))}
+		<span className="agent-mark" aria-hidden="true">
+			2
 		</span>
 	);
 }
 
+function ChatPicker({ id, options }: { id: string; options: { id: string; title: string }[] }) {
+	const title = options.find((chat) => chat.id === id)?.title ?? "Side chat";
+	return (
+		<Menu.Root modal={false}>
+			<Menu.Trigger
+				className="chat-picker"
+				aria-label={`Switch conversation, current conversation: ${title}`}
+			>
+				<History size={16} />
+				<span>{title}</span>
+				<ChevronDown size={15} />
+			</Menu.Trigger>
+			<Menu.Content
+				className="chat-menu"
+				align="start"
+				sideOffset={6}
+				collisionPadding={12}
+				aria-label="Conversations"
+			>
+				<Menu.Label className="chat-menu-label">Conversations</Menu.Label>
+				<Menu.RadioGroup value={id} onValueChange={selectChat}>
+					{options.map((chat) => (
+						<Menu.RadioItem
+							key={chat.id}
+							value={chat.id}
+							textValue={chat.title}
+							className="chat-menu-item"
+						>
+							{chat.id === "me" ? <NotebookPen size={15} /> : <MessageCircle size={15} />}
+							<span>{chat.title}</span>
+							<Menu.ItemIndicator>
+								<Check size={15} />
+							</Menu.ItemIndicator>
+						</Menu.RadioItem>
+					))}
+				</Menu.RadioGroup>
+			</Menu.Content>
+		</Menu.Root>
+	);
+}
+
+function EmptyChat({
+	main,
+	suggest,
+	hasDraft,
+}: {
+	main: boolean;
+	suggest: (text: string) => void;
+	hasDraft: boolean;
+}) {
+	return (
+		<div className="chat-empty">
+			<div className="chat-paper-stack" aria-hidden="true">
+				<div className="chat-paper-back" />
+				<div className="chat-paper-note">
+					<div className="chat-binding">
+						<i />
+						<i />
+						<i />
+					</div>
+					<span className="chat-note-line">
+						<Check />
+						<i />
+					</span>
+					<span className="chat-note-line">
+						<span />
+						<i />
+					</span>
+				</div>
+			</div>
+			<h2>{main ? "What’s on for today?" : "A fresh conversation"}</h2>
+			<p>
+				{main
+					? "Ask about your tasks or sketch out a plan."
+					: "Work through an idea in its own chat."}
+			</p>
+			<div className="chat-starters">
+				<button disabled={hasDraft} onClick={() => suggest("Help me plan my day.")}>
+					<Sun size={15} />
+					Plan my day
+				</button>
+				<button disabled={hasDraft} onClick={() => suggest("Which tasks are still open?")}>
+					<ListChecks size={15} />
+					Find open tasks
+				</button>
+			</div>
+		</div>
+	);
+}
+
 export function Chatbar() {
-	const [open, setOpen] = useState(false);
-	const [draft, setDraft] = useState("");
-	const [notice, setNotice] = useState("");
-	const [pending, setPending] = useState<string | null>(null);
-	const input = useRef<HTMLInputElement>(null);
-	const scroller = useRef<HTMLDivElement>(null);
-	const observation = useRef(client.observe({ live: "sse", limit: 200 }));
-	const snapshot = useSyncExternalStore(
-		observation.current.subscribe,
-		observation.current.getSnapshot,
-	);
-	const conversation = snapshot.conversation;
-	const messages = (conversation?.messages ?? []).filter(
-		(message) => message.display === "visible" && (message.purpose === "user" || message.purpose === "assistant"),
-	);
-	const busy =
-		pending !== null &&
-		!(conversation?.settlements ?? []).some(
-			(settlement: FlueConversationSettlement) => settlement.submissionId === pending,
-		);
-
-	// The plan changes when Copilot's tools run; the agenda refreshes with it.
-	useEffect(() => {
-		if (pending !== null && !busy) {
-			setPending(null);
-			window.dispatchEvent(new Event("notebook-tasks-created"));
-			input.current?.focus();
-		}
-	}, [busy, pending]);
-
-	useEffect(() => {
-		const show = () => {
-			setOpen(true);
-		};
-		window.addEventListener("notebook-copilot", show);
-		return () => window.removeEventListener("notebook-copilot", show);
-	}, []);
-
-	useEffect(() => {
-		if (!open) return;
-		const frame = requestAnimationFrame(() => input.current?.focus());
-		return () => cancelAnimationFrame(frame);
-	}, [open]);
-
-	useEffect(() => {
-		if (open) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-	}, [open, messages.length]);
-
-	async function send() {
-		const body = draft.trim();
-		if (!body || busy) return;
-		setNotice("");
-		setDraft("");
-		try {
-			const admission = await client.send({ message: { kind: "user", body } });
-			setPending(admission.submissionId);
-		} catch (error) {
-			setNotice(error instanceof Error ? error.message : "Could not reach the Copilot.");
-			setDraft(body);
-		}
-	}
-
+	const open = useChats((s) => s.open);
+	const id = useChats((s) => s.selected);
 	if (!open)
 		return (
-			<button className="copilot-fab" aria-label="Open the Copilot chat" onClick={() => setOpen(true)}>
-				<MessageCircle size={17} />
-				Copilot
+			<button
+				className="copilot-fab"
+				aria-label="Open the agent chat"
+				onClick={() => selectChat(id)}
+			>
+				<AgentMark /> Agent
 			</button>
 		);
+	return <ChatPanel key={id} id={id} />;
+}
+
+function ChatPanel({ id }: { id: string }) {
+	const list = useQuery(chatsQuery);
+	const composers = useChats((s) => s.composers);
+	const focus = useChats((s) => s.focus);
+	const composer = composers[id] ?? emptyComposer;
+	const [client] = useState(() => chatClient(id));
+	const agent = useFlueAgent({ client: composer.isNew ? undefined : client, live: "sse" });
+	const { refresh } = agent;
+	const input = useRef<HTMLTextAreaElement>(null);
+	// A send outside this hook can create a previously absent conversation.
+	useEffect(() => {
+		if (composer.version) refresh();
+	}, [composer.version, refresh]);
+	useEffect(() => {
+		input.current?.focus({ preventScroll: true });
+	}, [focus]);
+
+	const messages = agent.messages.filter(
+		(m) => m.display === "visible" && (m.purpose === "user" || m.purpose === "assistant"),
+	);
+	const settlements = agent.settlements;
+	const settled = new Set(settlements.map((s) => s.submissionId));
+	const busy = Boolean(
+		composer.busy || agent.status === "submitted" || agent.status === "streaming",
+	);
+	const lastSettlement = settlements.at(-1);
+	const error =
+		composer.error ||
+		agent.error?.message ||
+		(lastSettlement?.outcome === "failed" && !busy
+			? "The agent could not complete its last response."
+			: undefined);
+	const sides = list.data ?? [];
+	const pending = Object.keys(composers).filter(
+		(key) =>
+			key !== "me" && !sides.some((c) => c.id === key) && (composers[key].isNew || key === id),
+	);
+	const options = [
+		{ id: "me", title: "Main chat" },
+		...pending.map((id) => ({
+			id,
+			title: composers[id].draft.trim() || "New side chat",
+		})),
+		...sides,
+	];
+	const loading = !composer.isNew && !agent.historyReady && !error;
+	const empty = !messages.length && !busy && !loading && !error;
+	const last = messages.at(-1);
+	const showingReply =
+		last?.role === "assistant" &&
+		last.submissionId &&
+		!settled.has(last.submissionId) &&
+		last.parts.some((part) => (part.type === "text" && part.text) || part.type === "dynamic-tool");
+	function close() {
+		useChats.setState({ open: false });
+		requestAnimationFrame(() =>
+			document.querySelector<HTMLButtonElement>("[data-chat-launch]")?.focus({ preventScroll: true }),
+		);
+	}
+	function suggest(text: string) {
+		setDraft(id, text);
+		input.current?.focus();
+	}
 	return (
-		<section className="copilot" aria-label="Copilot chat">
+		<aside
+			className="copilot"
+			aria-label="Agent chat"
+			onKeyDown={(event) => {
+				if (
+					event.key === "Escape" &&
+					!event.defaultPrevented &&
+					!event.nativeEvent.isComposing &&
+					!event.currentTarget.querySelector('[data-state="open"]')
+				) {
+					event.stopPropagation();
+					close();
+				}
+			}}
+		>
 			<header className="copilot-head">
-				<strong>Copilot</strong>
-				{busy ? (
-					<button
-						className="plain"
-						aria-label="Stop the Copilot"
-						onClick={() => void client.abort().catch(() => {})}
-					>
-						<Square size={13} />
-					</button>
-				) : (
-					<small>{snapshot.phase === "live" ? "Ready" : snapshot.phase}</small>
-				)}
+				<div className="chat-identity">
+					<AgentMark />
+					<strong>Agent</strong>
+				</div>
 				<button
-					className="plain"
-					aria-label="Close the chat"
-					onClick={() => {
-						setOpen(false);
-						document.querySelector<HTMLElement>("main")?.focus();
-					}}
+					className="chat-icon"
+					title="New side chat"
+					aria-label="New side chat"
+					onClick={newSideChat}
 				>
-					<X size={15} />
+					<SquarePen size={17} />
+				</button>
+				<button
+					className="chat-icon"
+					title="Close chat"
+					aria-label="Close the chat"
+					onClick={close}
+				>
+					<X size={18} />
 				</button>
 			</header>
-			<div className="copilot-messages" ref={scroller}>
-				{messages.map((message) => (
-					<div key={message.id} className={"copilot-row " + message.role}>
-						{textOf(message)}
-						<ToolChips message={message} />
-					</div>
-				))}
-				{pending !== null &&
-					!messages.some((message) => message.submissionId === pending) &&
-					busy && <div className="copilot-row user muted">Sending…</div>}
-				{busy && <div className="copilot-row assistant muted">Thinking…</div>}
-				{!messages.length && !busy && (
-					<p className="muted">Ask Copilot to plan or check off your tasks.</p>
+			<div className="chat-switcher">
+				<ChatPicker id={id} options={options} />
+				{list.error && (
+					<p className="chat-error" role="alert">
+						Could not load chats. <button onClick={() => void list.refetch()}>Retry</button>
+					</p>
 				)}
 			</div>
-			<form
-				className="copilot-form"
-				onSubmit={(event) => {
-					event.preventDefault();
-					void send();
-				}}
+			<ChatTranscript
+				messages={messages}
+				busy={busy}
+				settled={settled}
+				stopped={!busy && lastSettlement?.outcome === "aborted"}
+				status={
+					busy && !showingReply
+						? composer.admitting
+							? "Sending"
+							: "Thinking"
+						: loading
+							? "Loading conversation"
+							: undefined
+				}
 			>
-				<input
-					ref={input}
-					value={draft}
-					maxLength={2000}
-					placeholder={busy ? "Copilot is working…" : "Ask about your plan…"}
-					aria-label="Message the Copilot"
-					onChange={(event) => setDraft(event.target.value)}
-					onKeyDown={(event) => {
-						if (event.key === "Escape") {
-							event.stopPropagation();
-							setOpen(false);
-							document.querySelector<HTMLElement>("main")?.focus();
-						}
+				{empty && (
+					<EmptyChat
+						main={id === "me"}
+						hasDraft={Boolean(composer.draft.trim())}
+						suggest={suggest}
+					/>
+				)}
+			</ChatTranscript>
+			<footer className="chat-dock">
+				{error && (
+					<p className="chat-error" role="alert">
+						{error}
+					</p>
+				)}
+				<form
+					className="chat-composer"
+					onSubmit={(e) => {
+						e.preventDefault();
+						if (!busy) void sendChat(id, composer.draft);
 					}}
-				/>
-				<button disabled={busy || !draft.trim()}>Send</button>
-			</form>
-			{notice && <p className="error" role="alert">{notice}</p>}
-		</section>
+				>
+					<textarea
+						ref={input}
+						value={composer.draft}
+						maxLength={2000}
+						rows={2}
+						placeholder="Message your agent…"
+						aria-label="Message the agent"
+						readOnly={composer.admitting}
+						onChange={(e) => setDraft(id, e.target.value)}
+						onKeyDown={(e) => {
+							if (
+								e.key === "Enter" &&
+								!e.shiftKey &&
+								!e.nativeEvent.isComposing &&
+								e.nativeEvent.keyCode !== 229
+							) {
+								e.preventDefault();
+								if (!busy && !e.repeat) e.currentTarget.form?.requestSubmit();
+							}
+						}}
+					/>
+					<div className="chat-composer-bar">
+						<span className="chat-key-hint">
+							<CornerDownLeft size={12} /> Send <span>·</span> Shift + Enter for a new line
+						</span>
+						{composer.draft.length >= 1800 && <small>{composer.draft.length}/2000</small>}
+						{busy ? (
+							<button
+								className="chat-send"
+								type="button"
+								title="Stop response"
+								aria-label="Stop the agent"
+								disabled={composer.admitting}
+								onClick={() => void client.abort().catch((e) => setChatError(id, e))}
+							>
+								<Square size={13} fill="currentColor" />
+							</button>
+						) : (
+							<button
+								className="chat-send"
+								type="submit"
+								title="Send message"
+								aria-label="Send message"
+								disabled={!composer.draft.trim()}
+							>
+								<ArrowUp size={18} />
+							</button>
+						)}
+					</div>
+				</form>
+			</footer>
+		</aside>
 	);
 }

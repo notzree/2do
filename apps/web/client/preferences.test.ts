@@ -12,6 +12,15 @@ function stored(values: Record<string, string>) {
 }
 afterEach(() => vi.unstubAllGlobals());
 
+it("starts a fresh notebook in Graphite and respects an explicit System setting", () => {
+  stored({});
+  expect(readPreferences()).toMatchObject({ theme: "notebook", mode: "dark" });
+  stored({ [storageKey]: JSON.stringify({ mode: "system" }) });
+  expect(readPreferences().mode).toBe("system");
+  stored({ [storageKey]: JSON.stringify({ theme: "nord" }) });
+  expect(readPreferences()).toMatchObject({ theme: "nord", mode: "system" });
+});
+
 it("carries the previous color mode and Vim preference into settings", () => {
   stored({ "planner-theme": "dark", "planner-keys": "off" });
   expect(readPreferences()).toEqual({ ...defaults, mode: "dark", keysEnabled: false });
@@ -43,4 +52,13 @@ it("rejects conflicting and reserved shortcuts without discarding valid settings
     });
     expect(readPreferences()).toEqual({ ...defaults, theme: "nord" });
   }
+});
+
+it("keeps legacy remaps and assigns unused keys to new date commands", () => {
+  const old = { day: "d", week: "n", calendar: "m", today: "t", copilot: "a", settings: "s" };
+  stored({ [storageKey]: JSON.stringify({ bindings: old }) });
+  const { bindings } = readPreferences();
+  expect(bindings).toMatchObject({ week: "n", calendar: "m", nextDay: "d" });
+  expect(bindings).not.toHaveProperty("day");
+  expect(new Set(Object.values(bindings)).size).toBe(Object.keys(defaultBindings).length);
 });
