@@ -33,14 +33,12 @@ export class TaskClassification {
 	}
 
 	request(taskId: string) {
-		const details = this.plugins.details(taskId);
+		if (!this.planner.task(taskId)) throw new PlannerError(404, "Task not found");
 		const enabled = this.plugins.enabledTypes();
 		if (!enabled.length) throw new PlannerError(409, "Enable a task plugin to classify this task.");
-		const manual = new Set(
-			details.subtypes.filter((s) => s.source === "manual").map((s) => s.typeId),
-		);
-		if (enabled.every(({ definition }) => manual.has(definition.id)))
-			throw new PlannerError(409, "All enabled types have already been set manually.");
+		const protectedTypes = this.plugins.protectedTypes(taskId);
+		if (enabled.every(({ definition }) => protectedTypes.has(definition.id)))
+			throw new PlannerError(409, "The enabled types have manual decisions or require a compatible version.");
 		this.plugins.db.requestClassification(taskId, Date.now());
 	}
 
@@ -51,15 +49,11 @@ export class TaskClassification {
 		const enabled = this.plugins.enabledTypes();
 		return jobs.map((job) => {
 			const task = this.planner.task(job.taskId);
-			const manual = new Set(
-				(task ? db.subtypes(task.id, task.title) : [])
-					.filter((s) => s.source === "manual")
-					.map((s) => s.typeId),
-			);
+			const protectedTypes = this.plugins.protectedTypes(job.taskId);
 			return {
 				job,
 				title: task?.title,
-				candidates: task ? enabled.filter(({ definition }) => !manual.has(definition.id)) : [],
+				candidates: task ? enabled.filter(({ definition }) => !protectedTypes.has(definition.id)) : [],
 			};
 		});
 	}
@@ -117,9 +111,8 @@ export class TaskClassification {
 			return;
 		}
 		const existing = new Map(db.subtypes(task.id, title).map((s) => [s.typeId, s]));
-		const automatic = candidates.filter(
-			({ definition }) => existing.get(definition.id)?.source !== "manual",
-		);
+		const protectedTypes = this.plugins.protectedTypes(task.id);
+		const automatic = candidates.filter(({ definition }) => !protectedTypes.has(definition.id));
 		const current = automatic.filter(
 			({ definition, epoch }) => epochs.get(definition.id) === epoch,
 		);
@@ -136,7 +129,7 @@ export class TaskClassification {
 		if (!db.finish(job)) return;
 		const decisions = current.map(({ definition, epoch }) => {
 			const matched = scores[definition.id] >= definition.classification.threshold;
-			if (!matched) db.removeAutomatic(task.id, definition.id);
+			if (!matched) this.plugins.removeAutomatic(task, definition.id);
 			else if (!existing.has(definition.id))
 				this.plugins.store(task.id, definition, "automatic", definition.initialData, title);
 			return { typeId: definition.id, epoch, matched };

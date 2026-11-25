@@ -6,6 +6,7 @@ import { notebookOperations } from "./notebook.ts";
 import { taskOperations } from "./tasks.ts";
 import { summaryOperations } from "./task-summaries.ts";
 import { reviewOperations } from "./review.ts";
+import { reportOperations } from "./plugin-reports.ts";
 
 export const publicOperations = {
 	health: createRoute({
@@ -27,6 +28,7 @@ export const publicOperations = {
 };
 
 export const plannerOperations = {
+	...reportOperations,
 	...reviewOperations,
 	...summaryOperations,
 	...chatOperations,

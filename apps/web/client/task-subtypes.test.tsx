@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vite-plus/test";
 import { task as taskSchema } from "@2do/api/plan";
-import { pluginInstallations, type TaskSubtypeEditor } from "@2do/api/task-plugins";
+import { pluginInstallations, taskDetails, type TaskSubtypeEditor } from "@2do/api/task-plugins";
 import { PromptFields, TaskSubtypes } from "./task-subtypes.tsx";
 
 const task = taskSchema.parse({
@@ -82,7 +82,7 @@ it("keeps co-required fields together when a single nested field supplies the hi
   expect(markup).toContain("Total minutes");
 });
 
-function renderTypes(enabled: boolean, details: object) {
+function renderTypes(enabled: boolean, details: object, compact = false) {
   const client = new QueryClient();
   client.setQueryData(
     ["planner", "plugins"],
@@ -95,18 +95,38 @@ function renderTypes(enabled: boolean, details: object) {
       },
     ],
   );
-  client.setQueryData(["planner", "details", task.id], {
+  client.setQueryData(["planner", "details", task.id], taskDetails.parse({
     task,
     subtypes: [],
     classification: "idle",
     ...details,
-  });
+  }));
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
-      <TaskSubtypes task={task} active openPlugins={() => {}} />
+      <TaskSubtypes task={task} active openPlugins={() => {}} compact={compact} />
     </QueryClientProvider>,
   );
 }
+
+it.each([false, true])("shows an attached subtype's workflow actions (compact=%s)", (compact) => {
+  const typeId = "study.session";
+  const revision = crypto.randomUUID();
+  const markup = renderTypes(true, {
+    subtypes: [{ typeId, revision, source: "manual", data: {}, schemaVersion: 1 }],
+    workflows: [{
+      typeId,
+      installationEpoch: crypto.randomUUID(),
+      taskRevision: task.revision,
+      subtypeRevision: revision,
+      workflowRevision: null,
+      pending: false,
+      status: "Ready to log",
+      actions: [{ id: "log", label: "Log study time", fields: [], defaults: {} }],
+    }],
+  }, compact);
+  expect(markup).toContain("Ready to log");
+  expect(markup).toContain(">Log study time</button>");
+});
 
 it("shows a recorded no-match result separately from a task awaiting its first classification", () => {
   const initial = renderTypes(true, {});

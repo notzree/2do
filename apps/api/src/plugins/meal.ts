@@ -1,16 +1,14 @@
 import { z } from "zod";
 import type { TaskPlugin, TaskSubtypeDefinition } from "../interfaces/task-plugins.ts";
 
-const nutrition = z.strictObject({
-	calories: z.number().nonnegative(),
-	proteinGrams: z.number().nonnegative(),
-});
-const maxFoods = 30;
-const maxFoodLength = 200;
-const mealData = z.strictObject({
-	foods: z.array(z.string().trim().min(1).max(maxFoodLength)).max(maxFoods).optional(),
-	estimatedNutrition: nutrition.optional(),
-});
+import {
+	foods,
+	mealData,
+	mealWorkflow,
+	nutrientFields,
+	nutrition,
+	nutritionMetrics,
+} from "./meal-workflow.ts";
 
 export type NutritionInfo = z.infer<typeof nutrition>;
 export interface Meal {
@@ -29,28 +27,15 @@ export const mealType: TaskSubtypeDefinition<z.infer<typeof mealData>, Meal> = {
 	initialData: {},
 	prompts: [{ id: "foods", field: "foods", label: "What did you eat?", trigger: "task.completed" }],
 	editor: [
-		{
-			fields: [
-				{
-					key: "foods",
-					label: "What did you eat?",
-					inlayLabel: "Foods",
-					kind: "text-list",
-					maxItems: maxFoods,
-					maxLength: maxFoodLength,
-				},
-			],
-		},
+		{ fields: [foods.field] },
 		{
 			key: "estimatedNutrition",
 			label: "Estimated nutrition",
 			requiredTogether: true,
-			fields: [
-				{ key: "calories", label: "Calories (kcal)", kind: "number", min: 0 },
-				{ key: "proteinGrams", label: "Protein (g)", kind: "number", min: 0 },
-			],
+			fields: nutrientFields.slice(0, 2),
 		},
 	],
+	workflow: mealWorkflow,
 	classification: {
 		instructions:
 			"Does the task describe the user having a meal? Count planned or past meals. Calendar shorthand counts: brunch, dinner with friends, meeting for noodles, grabbing a bite, or curry night. Exclude errands such as reserving a table, buying ingredients, delivering food to someone else, or picking someone up after dinner.",
@@ -66,6 +51,8 @@ export const mealType: TaskSubtypeDefinition<z.infer<typeof mealData>, Meal> = {
 export const nutritionPlugin: TaskPlugin = {
 	id: "nutrition",
 	label: "Nutrition",
+	description: "Log meals, review nutrient estimates, and track daily nutrition goals.",
+	metrics: nutritionMetrics,
 	subtypes: [mealType],
 	facts: [{ id: "nutrition.logged-meal", version: 1, scopes: ["local-day"] }],
 };

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { taskId } from "./plan.ts";
 import { subtypeId } from "./task-plugins.ts";
+import { imageId } from "./images.ts";
+export { imageId, imageReceipt, imageMimeTypes, maxImageBytes } from "./images.ts";
 
 /** Optimistic owner precondition for a browser replaying a locally saved draft. */
 export const plannerScopeHeader = "X-Planner-Scope";
@@ -21,8 +23,6 @@ const reference = z.strictObject({
 	type: z.enum(["taskRef", "graphRef"]),
 	attrs: z.strictObject({ id: taskId }),
 });
-export const imageId = z.string().regex(/^[a-f0-9]{64}$/);
-export const imageReceipt = z.strictObject({ id: imageId });
 const image = z.strictObject({
 	type: z.literal("image"),
 	attrs: z.strictObject({ id: imageId, alt: z.string().max(240) }),

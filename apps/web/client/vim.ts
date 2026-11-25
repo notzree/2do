@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from "react";
 import { boundCommand, type Bindings, type Command } from "./preferences.ts";
-import { toggleFocusedTaskHints } from "./commands.ts";
+import { isTaskInspectorShortcut, toggleFocusedTaskHints } from "./commands.ts";
 import { focusTaskTitle, stepNotebookSurface } from "./editor-navigation.ts";
 
 export const shortcuts = [
@@ -18,6 +18,7 @@ export const shortcuts = [
 	["gg / G", "First / last visible task"],
 	["o", "Add a task to the focused day"],
 	["i / Enter", "Edit or open the focused task"],
+	["Ctrl+]", "Open the focused task in the inspector"],
 	["x", "Toggle completion"],
 	["e", "Show or hide optional details on the focused task"],
 	["[ / ]", "Previous / next period"],
@@ -42,7 +43,6 @@ export function usePlannerKeys(options: Options) {
 		if (
 			!(target instanceof HTMLElement) ||
 			event.defaultPrevented ||
-			event.ctrlKey ||
 			event.metaKey ||
 			event.altKey ||
 			event.isComposing
@@ -53,6 +53,18 @@ export function usePlannerKeys(options: Options) {
 			target.closest(".graph, .copilot, .task-inspector, .review-panel")
 		)
 			return false;
+		if (event.ctrlKey) {
+			if (!options.enabled || !isTaskInspectorShortcut(event)) return false;
+			if (!target.matches('button, input[type="checkbox"]')) return false;
+			const title = target.matches("[data-task]")
+				? target
+				: target.closest(".task-row, .embedded.taskRef")?.querySelector<HTMLButtonElement>("[data-task]");
+			if (title) {
+				event.preventDefault();
+				if (!event.repeat) title.click();
+			}
+			return false;
+		}
 		if (
 			options.enabled &&
 			event.key === "d" &&
@@ -110,7 +122,7 @@ export function usePlannerKeys(options: Options) {
 			return false;
 		}
 		if (!options.enabled) return false;
-		const rows = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-task]")).filter(
+		const rows = Array.from(document.querySelectorAll<HTMLButtonElement>(".paper [data-task]")).filter(
 			(el) => !el.closest("details:not([open])") && el.getClientRects().length,
 		);
 		const current = target.closest(".task-row");

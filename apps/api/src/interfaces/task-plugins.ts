@@ -1,5 +1,19 @@
 import { z } from "zod";
+import { readFieldValue } from "./subtype-field-values.ts";
+export {
+	fieldName,
+	fieldGroupData,
+	readFieldValue,
+	readEditorValue,
+} from "./subtype-field-values.ts";
 import { task, type Task } from "./plan.ts";
+import {
+	actionDefinition,
+	workflowDetails,
+	type PluginWorkflow,
+	type PluginData,
+} from "./plugin-workflows.ts";
+import { metricDefinition, type MetricDefinition } from "./plugin-reports.ts";
 
 export const pluginId = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 export const subtypeId = z.string().regex(/^[a-z][a-z0-9-]{0,63}\.[a-z][a-z0-9-]{0,63}$/);
@@ -18,12 +32,15 @@ export const taskSubtype = z.strictObject({
 export const taskDetails = z.strictObject({
 	task,
 	subtypes: z.array(taskSubtype),
+	workflows: z.array(workflowDetails).optional(),
 	classification: z.enum(["idle", "pending", "failed"]),
-	lastClassification: z.strictObject({
-		checkedAt: z.iso.datetime(),
-		evaluated: z.array(subtypeId),
-		matched: z.array(subtypeId),
-	}).optional(),
+	lastClassification: z
+		.strictObject({
+			checkedAt: z.iso.datetime(),
+			evaluated: z.array(subtypeId),
+			matched: z.array(subtypeId),
+		})
+		.optional(),
 });
 
 export const writeTaskSubtype = z.strictObject({
@@ -67,6 +84,28 @@ const subtypeEditor = z.array(
 export const pluginInstallation = z.strictObject({
 	id: pluginId,
 	label: z.string(),
+	description: z.string().optional(),
+	metrics: z.array(metricDefinition).optional(),
+	facts: z
+		.array(
+			z.strictObject({
+				id: subtypeId,
+				version: z.int().positive(),
+				scopes: z.array(z.enum(["task", "local-day"])),
+			}),
+		)
+		.optional(),
+	features: z
+		.array(
+			z.strictObject({
+				id: subtypeId,
+				label: z.string(),
+				subtypeId,
+				requires: z.strictObject({ id: subtypeId, version: z.int().positive() }),
+				scope: z.enum(["task", "local-day"]),
+			}),
+		)
+		.optional(),
 	enabled: z.boolean(),
 	subtypes: z.array(
 		z.strictObject({
@@ -75,6 +114,10 @@ export const pluginInstallation = z.strictObject({
 			icon: taskTypeIcon.optional(),
 			captureCommand: pluginId.optional(),
 			schemaVersion: z.int().positive(),
+			classification: z
+				.strictObject({ instructions: z.string().min(1), threshold: z.number().min(0).max(1) })
+				.optional(),
+			actions: z.array(actionDefinition.partial({ fields: true })).optional(),
 			editor: subtypeEditor.optional(),
 			prompts: z.array(prompt).optional(),
 			initialData: subtypeData.optional(),
@@ -107,12 +150,7 @@ export function eligibleTaskPrompts(
 			for (const prompt of type.prompts ?? []) {
 				const id = type.id + "." + prompt.id;
 				if (prompt.trigger !== trigger || skipped?.has(id)) continue;
-				const [key, child] = prompt.field.split(".");
-				const parent = subtype.data[key];
-				const value =
-					child && parent && typeof parent === "object"
-						? (parent as Record<string, unknown>)[child]
-						: parent;
+				const value = readFieldValue(subtype.data, prompt.field);
 				if (value == null || value === "" || (Array.isArray(value) && !value.length))
 					result.push({ ...prompt, id, typeId: type.id });
 			}
@@ -132,12 +170,16 @@ export interface TaskSubtypeDefinition<Data extends NonNullable<TaskSubtype["dat
 	readonly classification: { readonly instructions: string; readonly threshold: number };
 	readonly editor?: TaskSubtypeEditor;
 	readonly prompts?: z.infer<typeof prompt>[];
+	readonly workflow?: PluginWorkflow<Data>;
+	readonly migrations?: Record<number, (data: PluginData) => PluginData>;
 	view(task: Task, data: Data): View;
 }
 
 export interface TaskPlugin {
 	readonly id: string;
 	readonly label: string;
+	readonly description?: string;
+	readonly metrics?: readonly MetricDefinition[];
 	readonly subtypes: readonly TaskSubtypeDefinition<NonNullable<TaskSubtype["data"]>, unknown>[];
 	readonly facts?: readonly PluginFact[];
 	readonly features?: readonly PluginFeature[];

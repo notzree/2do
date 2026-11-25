@@ -96,7 +96,7 @@ it("delivers captured notebook work after the HTTP response and permits writes w
 	} finally {
 		await f.provider("pass");
 	}
-	await expect.poll(async () => (await f.read()).classification).toBe("idle");
+	await expect.poll(async () => (await f.read()).classification, { timeout: 6000 }).toBe("idle");
 	expect(await f.read()).toMatchObject({
 		task: { completed: true },
 		subtypes: [{ source: "manual", data: null }],

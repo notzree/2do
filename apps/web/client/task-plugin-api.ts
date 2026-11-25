@@ -25,6 +25,7 @@ export async function saveTaskSubtype(taskId: string, typeId: string, input: Wri
     ).data,
   );
   void queryClient.invalidateQueries({ queryKey: ["planner", "summaries"] });
+  void queryClient.invalidateQueries({ queryKey: ["planner", "reports"] });
   return saved;
 }
 
@@ -56,6 +57,7 @@ export function useTaskPlugins() {
       );
       void queryClient.invalidateQueries({ queryKey: ["planner", "details"] });
       void queryClient.invalidateQueries({ queryKey: ["planner", "summaries"] });
+      void queryClient.invalidateQueries({ queryKey: ["planner", "reports"] });
     },
   };
 }

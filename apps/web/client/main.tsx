@@ -40,6 +40,7 @@ import { usePlan } from "./use-plan.ts";
 import "./style.css";
 import { Settings } from "./settings.tsx";
 import { sections, type Section } from "./settings-sections.ts";
+import { useReportSettings } from "./plugin-report-api.ts";
 import { readPreferences, storageKey, type Command, type Preferences } from "./preferences.ts";
 
 function readLocation() {
@@ -181,7 +182,7 @@ function WeekHeading({ days, focused, tasks, selectedDate, weekStart }: {
 }
 
 function Notebook({
-  view, date, days, focused, prefs, actions, error, go, shift, focusTarget, finishFocus, selectDay, commands, inspect, inspectorOpen, onHintStatus,
+  view, date, days, focused, prefs, actions, error, go, shift, focusTarget, finishFocus, selectDay, commands, inspect, inspectorOpen, onHintStatus, openSettings,
 }: {
   view: View;
   date: Date;
@@ -199,6 +200,7 @@ function Notebook({
   inspect: () => void;
   inspectorOpen: boolean;
   onHintStatus: (status: string) => void;
+  openSettings: (section: Section) => void;
 }) {
   const loose = actions?.plan.tasks.filter((t) => !t.schedule) ?? [];
   const [showLoose, setShowLoose] = useState(false);
@@ -212,7 +214,7 @@ function Notebook({
         {actions && (view === "calendar" ? (
           <MonthCalendar date={date} weekStart={prefs.weekStart} tasks={actions.plan.tasks}
             open={actions.open} select={(d) => go(view, d)}
-            openWeek={() => go("week", date)} />
+            openWeek={() => go("week", date)} openSettings={openSettings} />
         ) : (
           <WeekTaskHints onStatus={onHintStatus} days={days} tasks={actions.plan.tasks} includeUnscheduled={!focused && showLoose}>
             {days.map((day) => (
@@ -250,6 +252,7 @@ function PlannerView({
   change: (patch: Partial<Preferences>) => void;
 }) {
   const [{ view, date, section, focused }, setLocation] = useState(readLocation);
+  useReportSettings();
   const { data, error, busy, mutate } = usePlan();
   const settingsOpen = section !== null;
   const review = useReviewInbox();
@@ -481,6 +484,7 @@ function PlannerView({
           inspect={() => current ? closeTask() : setPalette("tasks")}
           inspectorOpen={Boolean(current)}
           onHintStatus={setHintStatus}
+          openSettings={openSettings}
           prefs={prefs}
           actions={actions}
           error={current ? "" : error}

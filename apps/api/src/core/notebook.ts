@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { PlannerStore } from "../db/planner.ts";
-import { days, images, taskCaptures } from "../db/schema.ts";
+import { days, taskCaptures } from "../db/schema.ts";
+import { ownsImage } from "../db/planner-images.ts";
 import type { CommitTaskWrite } from "../interfaces/database.ts";
 import {
 	emptyPage,
@@ -82,14 +83,7 @@ export class Notebook {
 				}
 				for (const id of refs) if (!previousRefs.has(id)) this.planner.get(id);
 				for (const node of draft.doc.content) {
-					if (
-						node.type === "image" &&
-						!this.db
-							.select({ id: images.id })
-							.from(images)
-							.where(eq(images.id, node.attrs.id))
-							.get()
-					)
+					if (node.type === "image" && !ownsImage(this.db, node.attrs.id))
 						throw new PlannerError(404, "Image unavailable");
 				}
 				const next = { revision: revision + 1, document: draft.doc, commandHash };

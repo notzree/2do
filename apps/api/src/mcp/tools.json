@@ -1,5 +1,155 @@
 [
   {
+    "name": "listPluginMetrics",
+    "description": "List metrics contributed by enabled plugins",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "method": "get",
+    "pathTemplate": "/api/plugin-metrics"
+  },
+  {
+    "name": "readMetricSeries",
+    "description": "Read confirmed metric sums and coverage across a half-open civil-date range",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "metricId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+        },
+        "from": {
+          "type": "string",
+          "format": "date"
+        },
+        "to": {
+          "type": "string",
+          "format": "date"
+        },
+        "bucket": {
+          "type": "string",
+          "enum": [
+            "day",
+            "week",
+            "month"
+          ],
+          "default": "day"
+        },
+        "weekStart": {
+          "type": "string",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "default": "0"
+        }
+      },
+      "required": [
+        "metricId",
+        "from",
+        "to"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/plugin-metrics/{metricId}/series",
+    "queryParameters": [
+      "from",
+      "to",
+      "bucket",
+      "weekStart"
+    ]
+  },
+  {
+    "name": "listGoals",
+    "description": "List goals for enabled metrics with their effective-dated targets",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "method": "get",
+    "pathTemplate": "/api/goals"
+  },
+  {
+    "name": "readAllGoalHistory",
+    "description": "Read daily outcomes and counts for all goals over a calendar range",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date"
+        },
+        "to": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/goals/history",
+    "queryParameters": [
+      "from",
+      "to"
+    ]
+  },
+  {
+    "name": "readGoalHistory",
+    "description": "Count daily outcomes using the target in effect each day",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "from": {
+          "type": "string",
+          "format": "date"
+        },
+        "to": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "id",
+        "from",
+        "to"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/goals/{id}/history",
+    "queryParameters": [
+      "from",
+      "to"
+    ]
+  },
+  {
     "name": "listReview",
     "description": "Read pending time changes",
     "annotations": {
@@ -353,6 +503,84 @@
     },
     "method": "put",
     "pathTemplate": "/api/days/{date}",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "runPluginAction",
+    "description": "Run an available plugin command at its reviewed revisions. Repeat the command ID for safe replay.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "typeId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+        },
+        "actionId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "installationEpoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "taskRevision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "subtypeRevision": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "workflowRevision": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            },
+            "commandId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "input": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "installationEpoch",
+            "taskRevision",
+            "subtypeRevision",
+            "workflowRevision",
+            "commandId",
+            "input"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "typeId",
+        "actionId",
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/tasks/{id}/subtypes/{typeId}/actions/{actionId}",
     "requestBodyContentType": "application/json"
   },
   {

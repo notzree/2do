@@ -10,6 +10,7 @@ import { TaskPlugins } from "./core/task-plugins.ts";
 import { TaskSummaries } from "./core/task-summaries.ts";
 import { Review } from "./core/review.ts";
 import { SqlitePlannerDatabase } from "./db/planner.ts";
+import { PlannerImages } from "./db/planner-images.ts";
 import { sideChats, taskCaptures } from "./db/schema.ts";
 import { SqliteTaskPluginDatabase } from "./db/task-plugins.ts";
 import type { CommitTaskWrite } from "./interfaces/database.ts";
@@ -17,6 +18,10 @@ import type { TaskClassifier } from "./interfaces/task-classifier.ts";
 import { plannerScopeHeader } from "./interfaces/notebook.ts";
 import { plannerMcpHandler } from "./mcp/server.ts";
 import { nutritionPlugin } from "./plugins/meal.ts";
+import { mealEstimator } from "./plugins/meal-workflow.ts";
+import type { EffectHandler } from "./interfaces/plugin-workflows.ts";
+import { PluginReports } from "./core/plugin-reports.ts";
+import { pluginReportRoutes } from "./routes/plugin-reports.ts";
 import { chatRoutes } from "./routes/chats.ts";
 import { imageRoutes } from "./routes/images.ts";
 import { notebookRoutes } from "./routes/notebook.ts";
@@ -31,21 +36,30 @@ export class UserPlanner extends DurableObject<Env> {
 		super(ctx, env);
 		ctx.blockConcurrencyWhile(async () => {
 			await migratePlanner(this.store);
+			this.plugins.workflows.migrate();
 			// A cold start may precede delivery of an existing alarm or its platform retry.
-			if (this.classification && await this.ctx.storage.getAlarm() === null) {
-				const due = this.pluginDb.nextDue();
+			if ((await this.ctx.storage.getAlarm()) === null) {
+				const due = this.nextDue();
 				if (due !== null) await this.ctx.storage.setAlarm(due);
 			}
 		});
 	}
 	private readonly db = new SqlitePlannerDatabase(this.store);
+	private readonly images = new PlannerImages(this.store, this.env.NOTEBOOK_IMAGES, this.ctx.id.toString());
 	private readonly pluginDb = new SqliteTaskPluginDatabase(this.store);
-	private readonly plugins = new TaskPlugins(this.db, this.pluginDb, [nutritionPlugin]);
+	private readonly plugins = new TaskPlugins(
+		this.db,
+		this.pluginDb,
+		[nutritionPlugin],
+		undefined,
+		this.createEffects(),
+	);
 	private readonly classifier = this.createClassifier();
 	private readonly classification =
 		this.classifier &&
 		new TaskClassification(this.db, this.plugins, this.classifier, this.classificationBatchSize());
 	private readonly planner = new Planner(this.db, (task, previous, rawInput) => {
+		this.plugins.workflows.taskChanged(task, previous);
 		if (task.title === previous?.title) return;
 		if (previous)
 			this.store
@@ -57,12 +71,11 @@ export class UserPlanner extends DurableObject<Env> {
 		else if (previous) this.pluginDb.supersedeCaptureInput(task.id);
 	});
 	private readonly commitTaskWrite: CommitTaskWrite = async (write) => {
-		if (!this.classification) return write();
 		return this.ctx.storage.transaction(async (txn) => {
 			const armed = await txn.getAlarm();
-			const previousDue = armed === null ? null : this.pluginDb.nextDue();
+			const previousDue = armed === null ? null : this.nextDue();
 			const result = write();
-			const due = this.pluginDb.nextDue();
+			const due = this.nextDue();
 			// An unrelated task edit must not pull forward a platform retry already in flight.
 			if (due !== armed && (armed === null || due === null || due !== previousDue)) {
 				if (due === null) await txn.deleteAlarm();
@@ -72,8 +85,9 @@ export class UserPlanner extends DurableObject<Env> {
 		});
 	};
 	private readonly routes = plannerApi<PlannerCaller>()
-		.route("/", reviewRoutes(new Review(this.store, this.planner)))
-		.route("/", taskSummaryRoutes(new TaskSummaries(this.store, this.plugins)))
+		.route("/", reviewRoutes(new Review(this.store, this.planner), this.commitTaskWrite))
+		.route("/", pluginReportRoutes(new PluginReports(this.plugins.workflows.reports, this.plugins)))
+		.route("/", taskSummaryRoutes(new TaskSummaries(this.plugins)))
 		.route(
 			"/",
 			plannerRoutes(this.planner, this.plugins, this.commitTaskWrite, this.classification),
@@ -83,7 +97,7 @@ export class UserPlanner extends DurableObject<Env> {
 			"/",
 			notebookRoutes(new Notebook(this.store, this.planner, this.commitTaskWrite, this.plugins)),
 		)
-		.route("/", imageRoutes(this.ctx.id.toString(), this.store, this.env.NOTEBOOK_IMAGES));
+		.route("/", imageRoutes(this.images));
 	private readonly mcp = plannerMcpHandler(async (request) =>
 		this.routes.fetch(request, { fromAgent: true }),
 	);
@@ -92,13 +106,27 @@ export class UserPlanner extends DurableObject<Env> {
 		return this.env.AI ? ClefTaskClassifier.using(this.env.AI) : undefined;
 	}
 
+	protected createEffects(): ReadonlyMap<string, EffectHandler> {
+		return new Map(this.env.AI ? [["nutrition.estimate", mealEstimator(this.env.AI, this.images)]] : []);
+	}
+	private nextDue() {
+		const classify = this.classification ? this.pluginDb.nextDue() : null;
+		const effect = this.plugins.workflows.db.nextDue();
+		return classify === null ? effect : effect === null ? classify : Math.min(classify, effect);
+	}
+
 	private classificationBatchSize() {
 		const size = Number(this.env.TASK_CLASSIFICATION_BATCH_SIZE);
 		return Number.isInteger(size) && size >= 1 && size <= 64 ? size : 8;
 	}
 
 	async alarm() {
-		await this.classification?.processDue(this.commitTaskWrite);
+		const work: Promise<void>[] = [];
+		if (this.classification && this.pluginDb.nextDue() !== null)
+			work.push(this.classification.processDue(this.commitTaskWrite));
+		if (this.plugins.workflows.db.nextDue() !== null)
+			work.push(this.plugins.workflows.processDue(this.commitTaskWrite));
+		await Promise.all(work);
 	}
 
 	hasSideChat(id: string) {

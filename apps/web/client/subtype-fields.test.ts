@@ -52,3 +52,16 @@ it("validates editable groups and retains zero as a known value", () => {
     ),
   ).toEqual({ estimatedNutrition: { calories: 0, proteinGrams: 0 } });
 });
+
+it("reads only supported input values and handles opaque nested data without coercion", () => {
+  expect(readFields(editor, { foods: ["Rice", 3], estimatedNutrition: "old layout" })).toEqual({
+    foods: "",
+    "estimatedNutrition.calories": "",
+    "estimatedNutrition.proteinGrams": "",
+  });
+  expect(readFields(editor, { estimatedNutrition: { calories: 0, proteinGrams: "0" } })).toEqual({
+    foods: "",
+    "estimatedNutrition.calories": "0",
+    "estimatedNutrition.proteinGrams": "",
+  });
+});

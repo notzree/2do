@@ -42,6 +42,7 @@
 		"./notebook": "./src/interfaces/notebook.ts",
 		"./plan": "./src/interfaces/plan.ts",
 		"./task-plugins": "./src/interfaces/task-plugins.ts",
+		"./plugin-reports": "./src/interfaces/plugin-reports.ts",
 		"./task-summaries": "./src/interfaces/task-summaries.ts",
 		"./chats": "./src/interfaces/chats.ts"
 	}

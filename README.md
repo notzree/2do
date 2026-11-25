@@ -22,7 +22,7 @@ Week is the default planner view. With the default bindings, `g w` opens Week, `
 
 In Normal mode, `j` and `k` traverse text, embedded tasks, and scheduled rows across day boundaries. `/link task` places another reference to an existing task. Pressing `dd` on a task deletes that task by ID throughout the planner, including notebook links and graph embeds on other days. Separate tasks can share a title. On prose or a graph block, `dd` removes the selected notebook block and `u` restores it.
 
-Type `/ta` in a day of Week and press Space, Tab, or Enter to complete `/task `. Use the arrow keys or Ctrl-n / Ctrl-p to choose another suggestion. Escape dismisses suggestions and keeps what you typed. Write the task and press Enter. The row appears immediately and the caret moves to the next paragraph while the page saves. Click a task title in Week or Month to open its inspector. Notebook captures show the original wording even after a title edit. Escape in the inspector returns focus to the planner.
+Type `/ta` in a day of Week and press Space, Tab, or Enter to complete `/task `. Use the arrow keys or Ctrl-n / Ctrl-p to choose another suggestion. Escape dismisses suggestions and keeps what you typed. Write the task and press Enter. The row appears immediately and the caret moves to the next paragraph while the page saves. With Vim shortcuts enabled, press `Ctrl+]` on a focused task in Week or Month to open its inspector. Clicking the task title also opens it. Notebook captures show the original wording even after a title edit. Escape in the inspector returns focus to the planner.
 
 `/note` switches the current block to a paragraph. Enabled plugins can also contribute capture commands. With Nutrition enabled, `/meal Bibimbap with friends` saves the task and your Meal selection together.
 
@@ -67,6 +67,12 @@ An edge `A → B` means A must finish before B can start. Inserting X **before**
 Task schedules support a floating calendar date, a fixed interval, a flexible window or an unscheduled task. Intervals use ISO timestamps with offsets and exclusive ends. The client projects them onto the viewer's local calendar. From an open fixed-time task, **Propose new time** sends a before/after diff to **Review**. Copilot can propose a move through the same inbox. Acceptance updates the schedule. Recent decisions offers Undo while the task remains at its accepted revision.
 
 ### Task plugins
+
+To build a plugin, follow the [agent authoring guide](apps/api/src/plugins/AGENTS.md). The [workflow design](docs/plugin-workflows.md) explains state transitions, period reports and daily goals.
+
+Open **Settings → Plugins** to inspect a plugin's types, fields, commands and metrics before enabling it. With Nutrition enabled, capture a meal and complete it. In the task inspector, **Estimate nutrients** accepts a meal photo, a note such as “I ate half this bowl,” or both. It also uses any saved foods. The photo goes to the vision model when you submit the estimate. Review the suggested values and choose **Confirm meal** to record the consumption day and nutrients. You can also enter foods and confirm values manually. **Correct meal** updates an existing entry. Reopening the task or changing its foods retracts the logged totals until you confirm again.
+
+Set the reporting time zone and create a target in **Settings → Goals**. Open the month calendar's **Reports** view for daily, weekly and monthly totals and goal outcomes. A missing nutrient contributes unknown coverage. An explicitly logged zero counts as a measured value.
 
 Enable Nutrition under **Settings → Plugins**. Create or rename a task to classify it in the background, or add Meal manually in the inspector. A matching Week row shows a Meal chip. Complete the task to make the optional foods hint available. Expand the hint with the pointer or `e` on the selected task, then enter foods or skip the prompt. Saved foods appear on the row. The inspector can restore skipped hints.
 

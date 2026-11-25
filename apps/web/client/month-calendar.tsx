@@ -1,5 +1,11 @@
-import { Columns3 } from "lucide-react";
+import { ChartNoAxesColumn, Columns3 } from "lucide-react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { Task } from "@2do/api/plan";
+import { DailyGoalDetails, PluginReports } from "./plugin-reports.tsx";
+import { historyQuery } from "./plugin-report-api.ts";
+import { goalsByDay, monthRange } from "./report-format.ts";
+import type { Section } from "./settings-sections.ts";
 import {
   dayKey,
   formatDate,
@@ -20,9 +26,14 @@ type Props = {
   open: (task: Task) => void;
   select: (day: Date) => void;
   openWeek: () => void;
+  openSettings: (section: Section) => void;
 };
 
-export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek }: Props) {
+export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek, openSettings }: Props) {
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const range = monthRange(date);
+  const history = useQuery({ ...historyQuery(range.from, range.to), enabled: !reportsOpen });
+  const goals = goalsByDay(history.data ?? []);
   const days = monthDays(date, weekStart);
   const selected = dayKey(date);
   const today = dayKey(new Date());
@@ -44,6 +55,9 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek }
         <div className="calendar-heading">
           <h1>{formatDate(date, { month: "long", year: "numeric" })}</h1>
           <div className="calendar-nav">
+            <button className="calendar-open-week" type="button" aria-pressed={reportsOpen} onClick={() => setReportsOpen(!reportsOpen)}>
+              <ChartNoAxesColumn size={15} /> Reports
+            </button>
             <button
               className="calendar-open-week"
               aria-label={`Open week containing ${fullDate(date)}`}
@@ -54,7 +68,8 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek }
             </button>
           </div>
         </div>
-        <div className="calendar-grid">
+        {reportsOpen ? <PluginReports key={range.from} date={date} weekStart={weekStart}
+          manage={() => openSettings("goals")} openPlugins={() => openSettings("plugins")} /> : <div className="calendar-grid">
           {days.slice(0, 7).map((day) => (
             <span className="calendar-weekday" key={day.getDay()}>
               {formatDate(day, { weekday: "short" })}
@@ -63,6 +78,12 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek }
           {days.map((day) => {
             const key = dayKey(day);
             const items = scheduled.filter(({ task }) => onDay(task, day));
+            const entries = goals.get(key) ?? [];
+            const met = entries.filter(({ entry }) => entry.outcome === "met").length;
+            const progress = entries.filter(({ entry }) => entry.outcome === "inProgress").length;
+            const unknown = entries.filter(({ entry }) => entry.outcome === "unknown").length;
+            const goalSummary = entries.length
+              ? (progress === entries.length ? "In progress" : unknown === entries.length ? "Goals unknown" : met + "/" + entries.length + " goals met") : "";
             return (
               <div
                 className="calendar-cell"
@@ -74,16 +95,18 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek }
                   data-calendar-day={key}
                   aria-current={key === today ? "date" : undefined}
                   aria-pressed={key === selected}
-                  aria-label={`${fullDate(day)}, ${items.length} scheduled`}
+                  aria-label={`${fullDate(day)}, ${items.length} scheduled` + (goalSummary ? ", " + goalSummary : "")}
                   onClick={() => select(day)}
                 >
                   {day.getDate()}
                 </button>
+                {goalSummary && <span className="calendar-goal-count" aria-hidden="true">{goalSummary}</span>}
                 {items.length > 0 && (
                   <ul className="calendar-tasks">
                     {items.map(({ task }) => (
                       <li key={task.id}>
                         <button
+                          data-task={task.id}
                           data-completed={task.completed}
                           title={task.title}
                           onClick={() => open(task)}
@@ -97,15 +120,17 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek }
               </div>
             );
           })}
-        </div>
+        </div>}
       </section>
-      <section className="calendar-upcoming" aria-labelledby="upcoming-heading">
+      {!reportsOpen && history.error && <p role="alert" className="error">{history.error.message} <button onClick={() => void history.refetch()}>Retry goals</button></p>}
+      {!reportsOpen && !!history.data?.length && <DailyGoalDetails entries={goals.get(selected) ?? []} day={selected} manage={() => openSettings("goals")} />}
+      {!reportsOpen && <section className="calendar-upcoming" aria-labelledby="upcoming-heading">
         <h2 id="upcoming-heading">Upcoming</h2>
         {upcoming.length ? (
           <ul>
             {upcoming.map(({ task, start }) => (
               <li key={task.id}>
-                <button onClick={() => open(task)}>
+                <button data-task={task.id} onClick={() => open(task)}>
                   <time dateTime={dayKey(start)}>
                     {formatDate(start, { month: "short", day: "numeric" })}
                   </time>
@@ -118,7 +143,7 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek }
         ) : (
           <p className="muted">No upcoming items scheduled.</p>
         )}
-      </section>
+      </section>}
     </>
   );
 }

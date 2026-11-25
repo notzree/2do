@@ -56,6 +56,10 @@ export function notebookCommands(plugins: readonly TaskPluginInstallation[] = []
 	return [...captureCommands, ...typed, ...otherCommands];
 }
 
+export function isTaskInspectorShortcut(event: KeyboardEvent) {
+	return event.ctrlKey && event.key === "]" && !event.altKey && !event.metaKey && !event.shiftKey;
+}
+
 export function toggleTaskHints(row: Element | null) {
 	const toggle = row?.querySelector<HTMLButtonElement>("button[data-task-enrich]:not(:disabled)");
 	if (!toggle?.getClientRects().length) return false;
