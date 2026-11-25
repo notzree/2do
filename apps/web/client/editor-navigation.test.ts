@@ -97,6 +97,7 @@ it("continues upwards through a standalone row into the preceding editor, then b
 		getClientRects: () => [{ height: 20 }],
 		matches: () => editor,
 		focus: vi.fn(),
+		scrollIntoView: vi.fn(),
 		dispatchEvent: vi.fn(),
 		closest: () => ({ querySelectorAll: () => stops }),
 	}));

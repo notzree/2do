@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./query.ts";
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Task } from "@2do/api/plan";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import {
   dayKey,
@@ -213,7 +214,7 @@ function Notebook({
         {!actions && !error && <p role="status">Loading your plan…</p>}
         {actions && (view === "calendar" ? (
           <MonthCalendar date={date} weekStart={prefs.weekStart} tasks={actions.plan.tasks}
-            open={actions.open} select={(d) => go(view, d)}
+            update={actions.mutate.updateTask} open={actions.open} select={(d) => go(view, d)}
             openWeek={() => go("week", date)} openSettings={openSettings} />
         ) : (
           <WeekTaskHints onStatus={onHintStatus} days={days} tasks={actions.plan.tasks} includeUnscheduled={!focused && showLoose}>
@@ -272,8 +273,9 @@ function PlannerView({
     };
     const modeChanged = (event: Event) => setEditorMode((event as CustomEvent<string>).detail);
     const focusChanged = (event: FocusEvent) => {
-      if (!(event.target instanceof Element) || !event.target.closest(".ProseMirror"))
-        setEditorMode("Normal");
+      if (!(event.target instanceof Element)) return;
+      if (event.target.matches("[data-inline-title]")) setEditorMode("Insert");
+      else setEditorMode(event.target.closest<HTMLElement>(".writing-surface")?.dataset.mode ?? "Normal");
     };
     window.addEventListener("keydown", shortcut);
     window.addEventListener("notebook-mode", modeChanged);
@@ -385,18 +387,16 @@ function PlannerView({
     );
   }
   function closeTask() {
-    setTaskId(null);
-    requestAnimationFrame(() => {
-      const daySurface = view === "week"
-        ? document.getElementById("day-" + dateKey)?.querySelector<HTMLElement>(".ProseMirror")
-        : document.querySelector<HTMLElement>(`[data-calendar-day="${dateKey}"]`);
-      const target =
-        origin.current?.isConnected && origin.current.getClientRects().length
-          ? origin.current
-          : daySurface ?? document.querySelector<HTMLElement>("main");
-      if (target?.matches(".ProseMirror")) target.dispatchEvent(new Event("notebook-refocus"));
-      else target?.focus({ preventScroll: true });
-    });
+    flushSync(() => setTaskId(null));
+    const daySurface = view === "week"
+      ? document.getElementById("day-" + dateKey)?.querySelector<HTMLElement>(".ProseMirror")
+      : document.querySelector<HTMLElement>(`[data-calendar-day="${dateKey}"]`);
+    const target =
+      origin.current?.isConnected && origin.current.getClientRects().length
+        ? origin.current
+        : daySurface ?? document.querySelector<HTMLElement>("main");
+    if (target?.matches(".ProseMirror")) target.dispatchEvent(new Event("notebook-refocus"));
+    else target?.focus({ preventScroll: true });
   }
   function closeReviewer() {
     review.close();
@@ -417,12 +417,19 @@ function PlannerView({
   function inspectTask(id: string) {
     review.close();
     if (useChats.getState().open) useChats.setState({ open: false });
-    setTaskId(id);
-    requestAnimationFrame(() => document.getElementById("task-inspector")?.focus({ preventScroll: true }));
+    flushSync(() => setTaskId(id));
+    document.getElementById("task-inspector")?.focus({ preventScroll: true });
+  }
+  function openTask(id: string, showGraph = false) {
+    const active = document.activeElement;
+    origin.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    setGraph(showGraph);
+    inspectTask(id);
   }
   usePlannerKeys({
     selectedDay: dateKey,
     deleteTask: (id) => { void mutate.deleteTask(id); },
+    inspect: openTask,
     enabled: prefs.keysEnabled,
     bindings: prefs.bindings,
     command: runCommand,
@@ -437,15 +444,9 @@ function PlannerView({
   });
   const actions = data && {
     plan: data,
-    selectedId: taskId ?? undefined,
     busy,
     mutate,
-    open: (t: Task, show = false) => {
-      const active = document.activeElement;
-      origin.current = active instanceof HTMLElement && active !== document.body ? active : null;
-      inspectTask(t.id);
-      setGraph(show);
-    },
+    open: (task: Task, showGraph = false) => openTask(task.id, showGraph),
   };
   const current = data?.tasks.find((t) => t.id === taskId);
 

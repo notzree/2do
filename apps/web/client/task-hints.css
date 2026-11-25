@@ -23,7 +23,7 @@
 }
 .embedded.taskRef:hover .embed-grip,
 .embedded.taskRef:focus-within .embed-grip,
-.embedded.taskRef[data-selected] .embed-grip {
+.ProseMirror:focus .embedded.taskRef[data-node-selected] .embed-grip {
   opacity: 0.75;
 }
 .embedded.taskRef > input[type="checkbox"],
@@ -52,12 +52,10 @@
   .embedded.taskRef > input[type="checkbox"], .task-row > input[type="checkbox"] { appearance: auto; }
   .embedded.taskRef > input[type="checkbox"]::after, .task-row > input[type="checkbox"]::after { display: none; }
 }
-:where(.notebook-main:not(:has(.ProseMirror:focus [data-node-selected]))) :is(.embedded.taskRef, .task-row)[data-selected],
 :is(.embedded.taskRef, .task-row):focus-within,
 .ProseMirror:focus .embedded.taskRef[data-node-selected] {
   background: color-mix(in srgb, var(--accent) 7%, var(--paper));
 }
-:where(.notebook-main:not(:has(.ProseMirror:focus [data-node-selected]))) :is(.embedded.taskRef, .task-row)[data-selected]::before,
 :is(.embedded.taskRef, .task-row):focus-within::before,
 .ProseMirror:focus .embedded.taskRef[data-node-selected]::before {
   content: "";
@@ -150,7 +148,8 @@
 .hint-tags .hint-inspect {
   opacity: 0;
 }
-:is(.embedded.taskRef, .task-row):is(:hover, :focus-within, [data-selected]) .hint-inspect,
+:is(.embedded.taskRef, .task-row):is(:hover, :focus-within) .hint-inspect,
+.ProseMirror:focus .embedded.taskRef[data-node-selected] .hint-inspect,
 .hint-tags .hint-inspect:focus-visible {
   opacity: 1;
 }

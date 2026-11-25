@@ -1,4 +1,5 @@
 import { createContext } from "react";
+import { NodeSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { lineStart } from "./editor-keys.ts";
 import type { TaskPluginInstallation, TaskTypeIconName } from "@2do/api/task-plugins";
@@ -58,6 +59,28 @@ export function notebookCommands(plugins: readonly TaskPluginInstallation[] = []
 
 export function isTaskInspectorShortcut(event: KeyboardEvent) {
 	return event.ctrlKey && event.key === "]" && !event.altKey && !event.metaKey && !event.shiftKey;
+}
+
+export type TitleCaret = "start" | "end";
+
+export function titleCaretForKey(key: string): TitleCaret | undefined {
+	if (key === "i" || key === "I" || key === "Enter") return "start";
+	if (key === "a" || key === "A") return "end";
+}
+
+// Address the visible occurrence, since one task can have multiple notebook references.
+export function requestTitleEdit(button: HTMLElement, caret: TitleCaret) {
+	button.dispatchEvent(new CustomEvent("edit-task-title", { detail: caret }));
+}
+
+export function editSelectedTaskTitle(view: EditorView, caret: TitleCaret) {
+	const { selection } = view.state;
+	if (!(selection instanceof NodeSelection) || selection.node.type.name !== "taskRef") return false;
+	const row = view.nodeDOM(selection.from);
+	const title = row instanceof Element && row.querySelector<HTMLElement>("button[data-task]");
+	if (title) requestTitleEdit(title, caret);
+	// A newly captured task may still be saving. Never let typing replace its reference.
+	return true;
 }
 
 export function toggleTaskHints(row: Element | null) {

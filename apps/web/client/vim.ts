@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from "react";
 import { boundCommand, type Bindings, type Command } from "./preferences.ts";
-import { isTaskInspectorShortcut, toggleFocusedTaskHints } from "./commands.ts";
+import { isTaskInspectorShortcut, requestTitleEdit, titleCaretForKey, toggleFocusedTaskHints } from "./commands.ts";
 import { focusTaskTitle, stepNotebookSurface } from "./editor-navigation.ts";
 
 export const shortcuts = [
@@ -17,7 +17,9 @@ export const shortcuts = [
 	["h / l", "Fold / unfold subtasks"],
 	["gg / G", "First / last visible task"],
 	["o", "Add a task to the focused day"],
-	["i / Enter", "Edit or open the focused task"],
+	["i / I", "Edit from the start of a task title (I starts at the first nonblank in prose)"],
+	["a / A", "Append to a task title (A appends at the end of a prose line)"],
+	["Enter / Esc", "Save / cancel an inline title edit"],
 	["Ctrl+]", "Open the focused task in the inspector"],
 	["x", "Toggle completion"],
 	["e", "Show or hide optional details on the focused task"],
@@ -31,6 +33,7 @@ type Options = {
 	bindings: Bindings;
 	selectedDay: string;
 	deleteTask: (id: string) => void;
+	inspect: (id: string) => void;
 	command: (id: Command) => void;
 	shift: (amount: number) => void;
 	help: () => void;
@@ -53,16 +56,20 @@ export function usePlannerKeys(options: Options) {
 			target.closest(".graph, .copilot, .task-inspector, .review-panel")
 		)
 			return false;
+		const title = target.matches("button[data-task]") ? target :
+			target.closest(".task-row, .embedded.taskRef")?.querySelector<HTMLElement>("button[data-task]");
 		if (event.ctrlKey) {
 			if (!options.enabled || !isTaskInspectorShortcut(event)) return false;
-			if (!target.matches('button, input[type="checkbox"]')) return false;
-			const title = target.matches("[data-task]")
-				? target
-				: target.closest(".task-row, .embedded.taskRef")?.querySelector<HTMLButtonElement>("[data-task]");
-			if (title) {
-				event.preventDefault();
-				if (!event.repeat) title.click();
-			}
+			if (!target.matches('button, input[type="checkbox"]') || !title?.dataset.task) return false;
+			event.preventDefault();
+			if (!event.repeat) options.inspect(title.dataset.task);
+			return false;
+		}
+		const caret = titleCaretForKey(event.key);
+		if (options.enabled && prefix !== "g" && caret && event.key !== "Enter" &&
+			title && (target === title || target.matches('input[type="checkbox"]'))) {
+			event.preventDefault();
+			requestTitleEdit(title, caret);
 			return false;
 		}
 		if (
@@ -185,16 +192,6 @@ export function usePlannerKeys(options: Options) {
 						else agenda?.querySelector<HTMLButtonElement>("[data-add-day]")?.click();
 						break;
 					}
-					case "i":
-						if (!row) return false;
-						row.click();
-						requestAnimationFrame(() => {
-							const input = document.querySelector<HTMLInputElement>("[data-edit-title]");
-							const details = input?.closest("details");
-							if (details) details.open = true;
-							input?.focus();
-						});
-						break;
 					case "x":
 						if (!current || event.repeat) return false;
 						current.querySelector<HTMLInputElement>("input[type=checkbox]")?.click();

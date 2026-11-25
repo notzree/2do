@@ -107,6 +107,9 @@ export function motion(view: EditorView, key: string) {
 		case "0":
 			next = 0;
 			break;
+		case "^":
+			next = text.length - text.trimStart().length;
+			break;
 		case "$":
 			next = text.length;
 			break;

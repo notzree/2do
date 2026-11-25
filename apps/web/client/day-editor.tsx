@@ -2,7 +2,10 @@ import { slashKeyDown, slashPlugin, type SlashActions } from "./slash-editor.ts"
 import { pageQuery } from "./query.ts";
 import { SlashSuggestions } from "./slash-suggestions.tsx";
 import { newSideChat, selectChat, sendChat, useChats } from "./chats.ts";
-import { isTaskInspectorShortcut, NotebookNavigation, notebookCommands, toggleSelectedTaskHints } from "./commands.ts";
+import {
+	editSelectedTaskTitle, isTaskInspectorShortcut, NotebookNavigation,
+	notebookCommands, titleCaretForKey, toggleSelectedTaskHints,
+} from "./commands.ts";
 import { useTaskPlugins } from "./task-plugin-api.ts";
 import { useQuery } from "@tanstack/react-query";
 import { boundCommand, type Bindings } from "./preferences.ts";
@@ -335,7 +338,11 @@ function WritingSurface({
 						}
 						return false;
 					}
-					if (currentMode === "Insert") return false;
+					const titleCaret = titleCaretForKey(event.key);
+					if (currentMode === "Insert") {
+						if (event.ctrlKey || event.altKey || event.metaKey || !titleCaret) return false;
+						return editSelectedTaskTitle(view, titleCaret);
+					}
 					if (event.key === "Escape") {
 						keySequence.current.key = "";
 						return false;
@@ -361,6 +368,7 @@ function WritingSurface({
 						opts.navigation?.go(command);
 						return true;
 					}
+					if (titleCaret && editSelectedTaskTitle(view, titleCaret)) return true;
 					if (key === "z" && opts.toggleFocus) {
 						if (!event.repeat) opts.toggleFocus();
 						return true;
@@ -369,7 +377,7 @@ function WritingSurface({
 						opts.shiftPeriod(key === "[" ? -1 : 1);
 						return true;
 					}
-					if (key === "i" || key === "j" || key === "k") return false;
+					if (key === "j" || key === "k") return false;
 					if (key === "/" && editor) {
 						if (view.state.selection instanceof NodeSelection) addLine(view);
 						editor.chain().enterInsertMode().insertContent("/").run();
@@ -388,10 +396,12 @@ function WritingSurface({
 						moveLine(view, key === "J" ? 1 : -1);
 						return true;
 					}
-					if (key === "a" || key === "o" || key === "O") {
+					if (["i", "I", "a", "A", "o", "O"].includes(key)) {
 						if (key === "o" || key === "O" || view.state.selection instanceof NodeSelection)
-							addLine(view, key === "O");
+							addLine(view, key === "O" || key.toLowerCase() === "i");
 						else if (key === "a") motion(view, "l");
+						else if (key === "A") motion(view, "$");
+						else if (key === "I") motion(view, "^");
 						editor?.commands.enterInsertMode();
 						return true;
 					}
@@ -460,7 +470,7 @@ function WritingSurface({
 	useEffect(() => {
 		if (!tiptapEditor) return;
 		return bindNotebookEditorEvents(tiptapEditor.view, (nextMode) => {
-			if (nextMode === "Normal") tiptapEditor.commands.enterNormalMode();
+			if (nextMode === "Normal" && latest.current.vim) tiptapEditor.commands.enterNormalMode();
 			else tiptapEditor.commands.enterInsertMode();
 		});
 	}, [tiptapEditor]);
@@ -479,7 +489,7 @@ function WritingSurface({
 				.run();
 		}
 		tiptapEditor.view.focus();
-		tiptapEditor.view.dom.closest("article")?.scrollIntoView({ block: "nearest" });
+		tiptapEditor.view.dispatch(tiptapEditor.state.tr.scrollIntoView());
 		onFocusRequested();
 	}, [onFocusRequested, tiptapEditor, vim]);
 	useEffect(() => {

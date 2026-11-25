@@ -6,6 +6,7 @@ import type { DayBuffer } from "./day-buffer.ts";
 import type { ListActions } from "./agenda.tsx";
 import { DependencyGraph } from "./graph.tsx";
 import { timeRange } from "./calendar.ts";
+import { TaskTitle } from "./task-title.tsx";
 import { TaskHints } from "./task-hints.tsx";
 
 export const NotebookReferences = createContext<{ actions: ListActions; buffer: DayBuffer } | null>(
@@ -35,7 +36,6 @@ export function NotebookReference({ node, selected }: NodeViewProps) {
       className={`embedded ${node.type.name}`}
       data-ref={node.type.name}
       data-id={id}
-      data-selected={actions.selectedId === id || undefined}
       data-node-selected={selected || undefined}
     >
       <span className="embed-grip" data-drag-handle title="Drag to reorder">
@@ -69,13 +69,8 @@ export function NotebookReference({ node, selected }: NodeViewProps) {
                 inspect={() => actions.open(task)}
                 meta={timeRange(task)}
                 title={
-                  <button
-                    data-task={task.id}
-                    className={"embed-title" + (task?.completed ? " done" : "")}
-                    onClick={() => actions.open(task)}
-                  >
-                    {task.title}
-                  </button>
+                  <TaskTitle task={task} update={actions.mutate.updateTask}
+                    className={"embed-title" + (task.completed ? " done" : "")} />
                 }
               />
             ) : (

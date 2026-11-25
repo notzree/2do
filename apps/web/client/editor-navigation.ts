@@ -72,7 +72,8 @@ export function stepNotebookSurface(current: HTMLElement, direction: 1 | -1) {
 	if (next.matches(".ProseMirror")) {
 		next.dispatchEvent(new CustomEvent("notebook-enter", { detail: direction }));
 	} else {
-		next.focus();
+		next.focus({ preventScroll: true });
+		next.scrollIntoView({ block: "nearest", inline: "nearest" });
 	}
 	return true;
 }
@@ -83,7 +84,8 @@ export function focusTaskTitle(title: HTMLElement, direction?: 1 | -1) {
 			new CustomEvent("notebook-select-task", { bubbles: true, detail: direction }),
 		);
 	} else {
-		title.focus();
+		title.focus({ preventScroll: true });
+		title.scrollIntoView({ block: "nearest", inline: "nearest" });
 	}
 }
 

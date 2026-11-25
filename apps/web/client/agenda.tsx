@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from "react";
 import type { Plan, Task } from "@2do/api/plan";
 import { dayKey, formatDate, onDay, timeRange } from "./calendar.ts";
 import type { Mutate } from "./use-plan.ts";
+import { TaskTitle } from "./task-title.tsx";
 import { TaskHints } from "./task-hints.tsx";
 
 export type ListActions = {
@@ -9,7 +10,6 @@ export type ListActions = {
   busy: boolean;
   mutate: Mutate;
   open: (task: Task, graph?: boolean) => void;
-  selectedId?: string;
 };
 
 // Each date/section is a projection. A child whose parent is elsewhere stays visible.
@@ -19,7 +19,6 @@ export function TaskList({
   busy,
   mutate,
   open,
-  selectedId,
 }: ListActions & { tasks: Task[] }) {
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const ids = new Set(tasks.map((t) => t.id));
@@ -66,7 +65,6 @@ export function TaskList({
           return (
             <li key={task.id}>
               <div
-                data-selected={selectedId === task.id || undefined}
                 className={"task-row" + (task.completed ? " completed" : "")}
               >
                 {group ? (
@@ -99,9 +97,7 @@ export function TaskList({
                     inspect={() => open(task)}
                     meta={meta}
                     title={
-                      <button className="task-title" data-task={task.id} onClick={() => open(task)}>
-                        {task.title}
-                      </button>
+                      <TaskTitle className="task-title" task={task} update={mutate.updateTask} />
                     }
                   />
                   {!task.completed && waiting.length > 0 && (

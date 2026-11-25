@@ -1,4 +1,6 @@
 import { ChartNoAxesColumn, Columns3 } from "lucide-react";
+import { TaskTitle } from "./task-title.tsx";
+import type { Mutate } from "./use-plan.ts";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Task } from "@2do/api/plan";
@@ -23,13 +25,14 @@ type Props = {
   date: Date;
   weekStart: WeekStart;
   tasks: Task[];
+  update: Mutate["updateTask"];
   open: (task: Task) => void;
   select: (day: Date) => void;
   openWeek: () => void;
   openSettings: (section: Section) => void;
 };
 
-export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek, openSettings }: Props) {
+export function MonthCalendar({ date, weekStart, tasks, update, open, select, openWeek, openSettings }: Props) {
   const [reportsOpen, setReportsOpen] = useState(false);
   const range = monthRange(date);
   const history = useQuery({ ...historyQuery(range.from, range.to), enabled: !reportsOpen });
@@ -105,14 +108,11 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek, 
                   <ul className="calendar-tasks">
                     {items.map(({ task }) => (
                       <li key={task.id}>
-                        <button
-                          data-task={task.id}
+                        <TaskTitle task={task} update={update}
                           data-completed={task.completed}
                           title={task.title}
                           onClick={() => open(task)}
-                        >
-                          {task.title}
-                        </button>
+                        />
                       </li>
                     ))}
                   </ul>
@@ -130,13 +130,13 @@ export function MonthCalendar({ date, weekStart, tasks, open, select, openWeek, 
           <ul>
             {upcoming.map(({ task, start }) => (
               <li key={task.id}>
-                <button data-task={task.id} onClick={() => open(task)}>
+                <TaskTitle task={task} update={update} onClick={() => open(task)}>
                   <time dateTime={dayKey(start)}>
                     {formatDate(start, { month: "short", day: "numeric" })}
                   </time>
                   <strong>{task.title}</strong>
                   <span>{timeRange(task) || "All day"}</span>
-                </button>
+                </TaskTitle>
               </li>
             ))}
           </ul>

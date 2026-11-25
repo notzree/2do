@@ -76,6 +76,7 @@ it("connects monthly goal counts and a selected day's actual target to the calen
 				date={date}
 				weekStart={1}
 				tasks={[]}
+				update={async () => true}
 				open={() => {}}
 				select={() => {}}
 				openWeek={() => {}}
