@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from "react";
 import { boundCommand, type Bindings, type Command } from "./preferences.ts";
-import { toggleTaskHints } from "./commands.ts";
+import { toggleFocusedTaskHints } from "./commands.ts";
 import { focusTaskTitle, stepNotebookSurface } from "./editor-navigation.ts";
 
 export const shortcuts = [
@@ -74,6 +74,15 @@ export function usePlannerKeys(options: Options) {
 			}
 		}
 		if (target.closest(".writing-surface")) {
+			// Native node-view controls stop ProseMirror keyboard handling. Route
+			// the details shortcut from a focused task button to its own panel.
+			if (
+				options.enabled && prefix !== "g" && event.key === "e" &&
+				!event.repeat && toggleFocusedTaskHints(target)
+			) {
+				event.preventDefault();
+				return false;
+			}
 			// Native node-view controls receive their own key events. Return to
 			// the actual editor selection when navigating from a task button.
 			const title = target.closest(".embedded.taskRef")?.querySelector<HTMLElement>("[data-task]");
@@ -179,7 +188,7 @@ export function usePlannerKeys(options: Options) {
 						current.querySelector<HTMLInputElement>("input[type=checkbox]")?.click();
 						break;
 					case "e":
-						if (event.repeat || !toggleTaskHints(current)) return false;
+						if (event.repeat || !toggleFocusedTaskHints(target)) return false;
 						break;
 					case "[":
 						options.shift(-1);

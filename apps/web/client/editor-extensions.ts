@@ -44,7 +44,7 @@ function referenceNode(name: "taskRef" | "graphRef") {
 			return ReactNodeViewRenderer(NotebookReference, {
 				stopEvent: ({ event }) =>
 					event.target instanceof Element &&
-					!!event.target.closest("button,input,textarea,select,label,form,a[href]") &&
+					!!event.target.closest("button,input,textarea,select,label,form,summary,a[href]") &&
 					!event.type.startsWith("drag"),
 			});
 		},

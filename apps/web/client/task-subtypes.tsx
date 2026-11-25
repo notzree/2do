@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, queryClient } from "./query.ts";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Task } from "@2do/api/plan";
 import type {
   TaskDetails,
@@ -372,14 +372,23 @@ export function TaskSubtypes({
   active,
   openPlugins,
   renderPrompts,
+  compact = false,
 }: {
   task: Task;
   active: boolean;
   openPlugins: () => void;
   renderPrompts?: (typeId: string) => ReactNode;
+  compact?: boolean;
 }) {
   const { plugins, error: pluginError, retry } = useTaskPlugins();
   const { details, error, refresh, accept } = useTaskDetails(task, active);
+  const [showAvailable, setShowAvailable] = useState(false);
+  const seenTypes = useRef(new Set<string>());
+  useEffect(() => {
+    for (const subtype of details?.subtypes ?? []) {
+      if (subtype.data !== null) seenTypes.current.add(subtype.typeId);
+    }
+  }, [details]);
   const definitions = plugins?.filter(({ enabled }) => enabled).flatMap(({ subtypes }) => subtypes);
   const classify = useMutation({
     mutationFn: () => api.POST("/api/tasks/{id}/classify", { params: { path: { id: task.id } } }),
@@ -398,6 +407,79 @@ export function TaskSubtypes({
   const matchedLabels = receipt?.matched.map(
     (id) => definitions?.find((d) => d.id === id)?.label ?? id,
   );
+  const card = (definition: Subtype) => (
+    <SubtypeCard
+      key={task.id + definition.id}
+      definition={definition}
+      subtype={details?.subtypes.find(({ typeId }) => typeId === definition.id)}
+      refresh={refresh}
+      write={async (input) => {
+        accept(await saveTaskSubtype(task.id, definition.id, input));
+      }}
+    >
+      {renderPrompts?.(definition.id)}
+    </SubtypeCard>
+  );
+  if (compact) {
+    const attached =
+      definitions?.filter((definition) =>
+        details?.subtypes.some((s) => s.typeId === definition.id && s.data !== null),
+      ) ?? [];
+    const available = definitions?.filter((definition) => !attached.includes(definition)) ?? [];
+    return (
+      <section className="task-subtypes task-subtypes-compact" aria-label="Types and fields">
+        <h3>Types and fields</h3>
+        {(pluginError || error) && (
+          <div className="actions">
+            <p className="error" role="alert">
+              {pluginError || error}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (pluginError) retry();
+                if (error) refresh();
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {(!plugins || !details) && !pluginError && !error && <p role="status">Loading types…</p>}
+        {details && available.length > 0 && (
+          <button
+            type="button"
+            className="type-add-toggle"
+            aria-expanded={showAvailable}
+            onClick={() => setShowAvailable(!showAvailable)}
+          >
+            {showAvailable ? "Hide available types" : "+ Add type"}
+          </button>
+        )}
+        {details &&
+          definitions?.map((definition) => (
+            <div
+              key={definition.id}
+              hidden={
+                !showAvailable &&
+                !attached.includes(definition) &&
+                !seenTypes.current.has(definition.id)
+              }
+            >
+              {card(definition)}
+            </div>
+          ))}
+        {details && definitions?.length === 0 && (
+          <p>
+            No plugins enabled.{" "}
+            <button type="button" onClick={openPlugins}>
+              Open inspector
+            </button>
+          </p>
+        )}
+      </section>
+    );
+  }
   return (
     <section className="task-subtypes" aria-label="Task subtypes">
       <div className="section-head">
@@ -438,20 +520,7 @@ export function TaskSubtypes({
       {details && definitions?.length === 0 && (
         <p className="type-note">No plugins enabled for this planner.</p>
       )}
-      {details &&
-        definitions?.map((definition) => (
-          <SubtypeCard
-            key={task.id + definition.id}
-            definition={definition}
-            subtype={details.subtypes.find(({ typeId }) => typeId === definition.id)}
-            refresh={refresh}
-            write={async (input) => {
-              accept(await saveTaskSubtype(task.id, definition.id, input));
-            }}
-          >
-            {renderPrompts?.(definition.id)}
-          </SubtypeCard>
-        ))}
+      {details && definitions?.map(card)}
       {receipt && (
         <div className="type-activity">
           <h3>Activity</h3>

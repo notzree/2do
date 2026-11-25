@@ -2,7 +2,7 @@ import { slashKeyDown, slashPlugin, type SlashActions } from "./slash-editor.ts"
 import { api, pageQuery } from "./query.ts";
 import { SlashSuggestions } from "./slash-suggestions.tsx";
 import { newSideChat, selectChat, sendChat, useChats } from "./chats.ts";
-import { NotebookNavigation, notebookCommands, toggleTaskHints } from "./commands.ts";
+import { NotebookNavigation, notebookCommands, toggleSelectedTaskHints } from "./commands.ts";
 import { useTaskPlugins } from "./task-plugin-api.ts";
 import { useQuery } from "@tanstack/react-query";
 import { boundCommand, type Bindings } from "./preferences.ts";
@@ -398,8 +398,8 @@ function WritingSurface({
 					const node = view.state.doc.nodeAt(pos);
 					if (key === "e") {
 						if (node?.type.name !== "taskRef") return false;
-						const row = view.nodeDOM(pos);
-						return !event.repeat && row instanceof Element && toggleTaskHints(row);
+						if (!event.repeat) toggleSelectedTaskHints(view);
+						return true;
 					}
 					if (
 						(key === "Enter" || key === "x") &&

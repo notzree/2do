@@ -965,6 +965,11 @@
         "to": {
           "type": "string",
           "format": "uuid"
+        },
+        "expectedRevision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision."
         }
       },
       "required": [
@@ -973,7 +978,10 @@
       ]
     },
     "method": "put",
-    "pathTemplate": "/api/dependencies/{from}/{to}"
+    "pathTemplate": "/api/dependencies/{from}/{to}",
+    "queryParameters": [
+      "expectedRevision"
+    ]
   },
   {
     "name": "removeDependency",
@@ -994,6 +1002,11 @@
         "to": {
           "type": "string",
           "format": "uuid"
+        },
+        "expectedRevision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision."
         }
       },
       "required": [
@@ -1002,6 +1015,9 @@
       ]
     },
     "method": "delete",
-    "pathTemplate": "/api/dependencies/{from}/{to}"
+    "pathTemplate": "/api/dependencies/{from}/{to}",
+    "queryParameters": [
+      "expectedRevision"
+    ]
   }
 ]

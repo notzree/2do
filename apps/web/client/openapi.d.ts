@@ -3132,7 +3132,10 @@ export interface operations {
     };
     addDependency: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Plan revision reviewed by the caller. An already-applied change succeeds at any revision. */
+                expectedRevision?: string;
+            };
             header?: never;
             path: {
                 from: string;
@@ -3207,7 +3210,10 @@ export interface operations {
     };
     removeDependency: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Plan revision reviewed by the caller. An already-applied change succeeds at any revision. */
+                expectedRevision?: string;
+            };
             header?: never;
             path: {
                 from: string;
@@ -3244,6 +3250,15 @@ export interface operations {
             };
             /** @description Resource not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision, graph or ID conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

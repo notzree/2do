@@ -5,7 +5,7 @@ import type { Task } from "@2do/api/plan";
 import { summaryBatchSize, taskSummaries, type TaskSummary } from "@2do/api/task-summaries";
 import { dayKey, onDay } from "./calendar.ts";
 import { api, pageQuery, queryClient } from "./query.ts";
-import { PromptFields } from "./task-subtypes.tsx";
+import { PromptFields, TaskSubtypes } from "./task-subtypes.tsx";
 import { TaskTypeIcon } from "./task-type-icon.tsx";
 import "./task-hints.css";
 
@@ -206,6 +206,7 @@ export function TaskHints({
 }) {
   const summary = useContext(Summaries).get(task.id);
   const [expanded, setExpanded] = useState(false);
+  const [opened, setOpened] = useState(false);
   const [editing, setEditing] = useState<TaskSummary["prompts"][number]>();
   const toggle = useRef<HTMLButtonElement>(null);
   const types = summary?.types ?? [];
@@ -213,7 +214,6 @@ export function TaskHints({
   const active =
     editing && (!summary || types.some((t) => t.typeId === editing.typeId)) ? editing : undefined;
   const prompts = summary?.prompts.filter((p) => !p.skipped) ?? [];
-  const hasDetails = !!(prompts.length || active);
   const inlays = summary?.inlays ?? [];
   const visiblePrompts =
     active && !prompts.some((p) => p.id === active.id) ? [...prompts, active] : prompts;
@@ -258,43 +258,41 @@ export function TaskHints({
           </button>
         </div>
       </div>
-      {(hasDetails || meta || inlays.length > 0 || summary?.classification === "failed") && (
-        <div className="hint-context">
-          {hasDetails && (
-            <button
-              ref={toggle}
-              type="button"
-              className="hint-toggle"
-              data-task-enrich
-              aria-expanded={expanded}
-              onClick={() => setExpanded(!expanded)}
-            >
-              <Sparkles size={12} aria-hidden="true" />
-              {active && !prompts.length
-                ? "Details"
-                : prompts.length +
-                  (prompts.length === 1 ? " optional detail" : " optional details")}
-              <ChevronDown size={12} aria-hidden="true" />
-            </button>
-          )}
-          {meta && <span>{meta}</span>}
-          {inlays.map((v) => (
-            <span
-              key={v.typeId + "." + v.field}
-              className="hint-value"
-              title={v.label + " · " + v.value}
-            >
-              {v.label} · {v.value}
-            </span>
-          ))}
-          {summary?.classification === "failed" && (
-            <button type="button" className="hint-failed" onClick={inspect}>
-              Classification failed
-            </button>
-          )}
-        </div>
-      )}
-      {(expanded || active) && hasDetails && (
+      <div className="hint-context">
+        <button
+          ref={toggle}
+          type="button"
+          className="hint-toggle"
+          data-task-enrich
+          aria-expanded={expanded}
+          onClick={() => {
+            setOpened(true);
+            setExpanded(!expanded);
+          }}
+        >
+          <Sparkles size={12} aria-hidden="true" />
+          {!prompts.length
+            ? "Details"
+            : prompts.length + (prompts.length === 1 ? " optional detail" : " optional details")}
+          <ChevronDown size={12} aria-hidden="true" />
+        </button>
+        {meta && <span>{meta}</span>}
+        {inlays.map((v) => (
+          <span
+            key={v.typeId + "." + v.field}
+            className="hint-value"
+            title={v.label + " · " + v.value}
+          >
+            {v.label} · {v.value}
+          </span>
+        ))}
+        {summary?.classification === "failed" && (
+          <button type="button" className="hint-failed" onClick={inspect}>
+            Classification failed
+          </button>
+        )}
+      </div>
+      {(opened || active) && (
         <div className="hint-body" hidden={!expanded}>
           <div className="hint-caption">
             <span>Optional details</span>
@@ -331,6 +329,7 @@ export function TaskHints({
               {active?.id === prompt.id && <PromptFields task={task} prompt={active} />}
             </div>
           ))}
+          <TaskSubtypes task={task} active={expanded} openPlugins={inspect} compact />
         </div>
       )}
     </div>
