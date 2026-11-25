@@ -10,6 +10,7 @@ import type {
   WriteTaskSubtype,
 } from "@2do/api/task-plugins";
 import { Modal } from "./modal.tsx";
+import { WorkflowActions } from "./workflow-actions.tsx";
 import { Check, RefreshCw, Sparkles } from "lucide-react";
 import { TaskTypeIcon } from "./task-type-icon.tsx";
 import { readTaskDetails, saveTaskSubtype, useTaskPlugins } from "./task-plugin-api.ts";
@@ -24,7 +25,7 @@ function useTaskDetails(task: Task, active: boolean) {
     queryKey,
     enabled: active,
     queryFn: ({ signal }) => readTaskDetails(task.id, signal),
-    refetchInterval: (q) => (q.state.data?.classification === "pending" ? 1500 : false),
+    refetchInterval: (q) => (q.state.data?.classification === "pending" || q.state.data?.workflows?.some(w=>w.pending) ? 1500 : false),
   });
   return {
     details: query.data,
@@ -392,7 +393,7 @@ export function TaskSubtypes({
   const canClassify =
     details &&
     definitions?.some(
-      (t) => !details.subtypes.some((s) => s.typeId === t.id && s.source === "manual"),
+      (t) => !details.subtypes.some((s) => s.typeId === t.id && (s.source === "manual" || s.schemaVersion !== t.schemaVersion)),
     );
   const receipt = details?.lastClassification;
   const matchedLabels = receipt?.matched.map(
@@ -450,6 +451,9 @@ export function TaskSubtypes({
             }}
           >
             {renderPrompts?.(definition.id)}
+            {details.workflows?.filter(w=>w.typeId===definition.id).map(workflow=>
+              <WorkflowActions key={workflow.typeId} taskId={task.id} workflow={workflow}/>
+            )}
           </SubtypeCard>
         ))}
       {receipt && (

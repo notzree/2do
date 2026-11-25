@@ -15,6 +15,15 @@ import {
 	type WriteTaskSubtype,
 } from "../interfaces/task-plugins.ts";
 import { PlannerError } from "./planner.ts";
+import { PluginWorkflows } from "./plugin-workflows.ts";
+import { validateSubtypeDefinition, describeSubtype } from "../interfaces/plugin-fields.ts";
+import {
+	actionDefinition,
+	actionInputSchema,
+	type EffectHandler,
+} from "../interfaces/plugin-workflows.ts";
+import { metricDefinition } from "../interfaces/plugin-reports.ts";
+import { pluginInstallation, type TaskPluginInstallation } from "../interfaces/task-plugins.ts";
 
 type Definition = TaskSubtypeDefinition<NonNullable<TaskSubtype["data"]>, unknown>;
 
@@ -43,20 +52,31 @@ function sameScope(a: FactScope, b: FactScope): boolean {
 }
 
 export class TaskPlugins {
+	readonly workflows: PluginWorkflows;
 	private readonly types = new Map<string, { pluginId: string; definition: Definition }>();
 	private readonly plugins = new Map<string, TaskPlugin>();
 	private readonly features = new Map<string, { consumer: string; feature: PluginFeature }>();
+	private readonly manifests: TaskPluginInstallation[] = [];
 
 	constructor(
 		private readonly planner: Pick<PlannerDatabase, "task" | "transaction">,
 		readonly db: SqliteTaskPluginDatabase,
 		plugins: readonly TaskPlugin[],
 		private readonly factAccess?: PluginFactAccess,
+		effects: ReadonlyMap<string, EffectHandler> = new Map(),
 	) {
+		const metrics = new Map<string, number>();
+		this.workflows = new PluginWorkflows(planner, db, this.types, effects, metrics);
 		for (const plugin of plugins) {
 			pluginId.parse(plugin.id);
 			if (this.plugins.has(plugin.id)) throw new Error("Duplicate task plugin " + plugin.id);
 			this.plugins.set(plugin.id, plugin);
+			for (const metric of plugin.metrics ?? []) {
+				metricDefinition.parse(metric);
+				if (!metric.id.startsWith(plugin.id + ".") || metrics.has(metric.id))
+					throw new Error("Invalid or duplicate metric " + metric.id);
+				metrics.set(metric.id, metric.version);
+			}
 			const factIds = new Set<string>();
 			for (const fact of plugin.facts ?? []) {
 				subtypeId.parse(fact.id);
@@ -70,23 +90,23 @@ export class TaskPlugins {
 				factIds.add(fact.id);
 			}
 			for (const definition of plugin.subtypes) {
+				validateSubtypeDefinition(definition);
+				if (definition.workflow) {
+					const flow = definition.workflow;
+					if (!Number.isSafeInteger(flow.version) || flow.version < 1)
+						throw new Error("Invalid workflow version");
+					flow.schema.parse(flow.initial);
+					const ids = new Set<string>();
+					for (const command of flow.commands) {
+						actionInputSchema(actionDefinition.parse(command));
+						if (ids.has(command.id)) throw new Error("Duplicate workflow command " + command.id);
+						ids.add(command.id);
+					}
+				}
 				subtypeId.parse(definition.id);
 				if (definition.captureCommand !== undefined) pluginId.parse(definition.captureCommand);
 				if (!definition.id.startsWith(plugin.id + ".") || this.types.has(definition.id)) {
 					throw new Error("Invalid or duplicate task subtype " + definition.id);
-				}
-				definition.schema.parse(definition.initialData);
-				const fields = new Set(
-					definition.editor?.flatMap((group) =>
-						group.fields.map((field) => (group.key ? group.key + "." + field.key : field.key)),
-					),
-				);
-				const promptIds = new Set<string>();
-				for (const prompt of definition.prompts ?? []) {
-					pluginId.parse(prompt.id);
-					if (!fields.has(prompt.field) || promptIds.has(prompt.id))
-						throw new Error("Invalid or duplicate prompt " + definition.id + "." + prompt.id);
-					promptIds.add(prompt.id);
 				}
 				this.types.set(definition.id, { pluginId: plugin.id, definition });
 			}
@@ -103,28 +123,27 @@ export class TaskPlugins {
 					throw new Error("Invalid or duplicate feature " + feature.id);
 				this.features.set(feature.id, { consumer: plugin.id, feature });
 			}
+			this.manifests.push(
+				pluginInstallation.parse({
+					id: plugin.id,
+					label: plugin.label,
+					description: plugin.description,
+					metrics: plugin.metrics,
+					facts: plugin.facts,
+					enabled: false,
+					features: plugin.features?.map(({ requires, ...feature }) => ({
+						...feature,
+						requires: { id: requires.id, version: requires.version },
+					})),
+					subtypes: plugin.subtypes.map(describeSubtype),
+				}),
+			);
 		}
 	}
 
-	installations() {
+	installations(): TaskPluginInstallation[] {
 		const enabled = this.db.installations();
-		return Array.from(this.plugins.values(), (plugin) => ({
-			id: plugin.id,
-			label: plugin.label,
-			enabled: enabled.has(plugin.id),
-			subtypes: plugin.subtypes.map(
-				({ id, label, icon, captureCommand, schemaVersion, editor, initialData, prompts }) => ({
-					id,
-					label,
-					icon,
-					captureCommand,
-					schemaVersion,
-					editor,
-					initialData,
-					prompts,
-				}),
-			),
-		}));
+		return this.manifests.map((plugin) => ({ ...plugin, enabled: enabled.has(plugin.id) }));
 	}
 
 	private activeFeatures(id: string, timeZone?: string) {
@@ -191,7 +210,12 @@ export class TaskPlugins {
 		const plugin = this.plugins.get(id);
 		if (!plugin) throw new PlannerError(404, "Task plugin not found");
 		this.planner.transaction(() => {
-			if (!this.db.setEnabled(id, enabled) || !enabled) return;
+			if (!this.db.setEnabled(id, enabled)) return;
+			this.workflows.installation(
+				plugin.subtypes.map((d) => d.id),
+				this.db.installations().get(id),
+			);
+			if (!enabled) return;
 			for (const definition of plugin.subtypes) {
 				for (const taskId of this.db.staleAutomatic(definition.id))
 					this.db.enqueue(taskId, Date.now());
@@ -208,6 +232,19 @@ export class TaskPlugins {
 		});
 	}
 
+	protectedTypes(taskId: string) {
+		return new Set(
+			this.db
+				.storedTypes(taskId)
+				.filter(
+					(row) =>
+						row.source === "manual" ||
+						row.version !== this.types.get(row.typeId)?.definition.schemaVersion,
+				)
+				.map((row) => row.typeId),
+		);
+	}
+
 	private getTask(id: string) {
 		const task = this.planner.task(id);
 		if (!task) throw new PlannerError(404, "Task not found");
@@ -216,10 +253,17 @@ export class TaskPlugins {
 
 	details(id: string): TaskDetails {
 		const task = this.getTask(id);
-		const enabled = new Map(this.enabledTypes().map(({ definition, epoch }) => [definition.id, epoch]));
+		const enabled = new Map(
+			this.enabledTypes().map(({ definition, epoch }) => [definition.id, epoch]),
+		);
+		const subtypes = this.db.subtypes(id, task.title).filter(({ typeId }) => enabled.has(typeId));
+		const workflows = subtypes.flatMap(
+			(s) => this.workflows.describe(task, s, enabled.get(s.typeId)!) ?? [],
+		);
 		return {
 			task,
-			subtypes: this.db.subtypes(id, task.title).filter(({ typeId }) => enabled.has(typeId)),
+			subtypes,
+			...(workflows.length ? { workflows } : {}),
 			classification: this.db.classification(id),
 			lastClassification: this.db.lastResult(id, task.title, enabled),
 		};
@@ -227,7 +271,8 @@ export class TaskPlugins {
 
 	attachAtCapture(id: string, typeId: string) {
 		const definition = this.types.get(typeId)?.definition;
-		if (!definition?.captureCommand) throw new PlannerError(404, "Task capture command unavailable");
+		if (!definition?.captureCommand)
+			throw new PlannerError(404, "Task capture command unavailable");
 		return this.write(id, typeId, { revision: null, data: definition.initialData });
 	}
 
@@ -260,7 +305,22 @@ export class TaskPlugins {
 			source,
 			data: data === null ? null : definition.schema.parse(data),
 		};
-		this.db.putSubtype(id, subtype, classifiedTitle);
-		return subtype;
+		return this.planner.transaction(() => {
+			const stored = this.db.storedTypes(id).find((row) => row.typeId === definition.id);
+			if (stored && stored.version !== definition.schemaVersion)
+				throw new PlannerError(409, "This subtype needs a compatible version before editing.");
+			const task = this.getTask(id);
+			const previous = this.db.subtypes(id, task.title).find((s) => s.typeId === definition.id);
+			this.db.putSubtype(id, subtype, classifiedTitle);
+			this.workflows.changed(definition.id, task, subtype, task, previous);
+			return subtype;
+		});
+	}
+
+	removeAutomatic(task: Task, typeId: string) {
+		const previous = this.db.subtypes(task.id, task.title).find((s) => s.typeId === typeId);
+		this.db.removeAutomatic(task.id, typeId);
+		if (previous?.source === "automatic")
+			this.workflows.changed(typeId, task, undefined, task, previous);
 	}
 }

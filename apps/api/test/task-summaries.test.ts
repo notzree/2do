@@ -1,7 +1,7 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { expect, it } from "vite-plus/test";
 import { task } from "../src/interfaces/plan.ts";
-import { taskSubtype } from "../src/interfaces/task-plugins.ts";
+import { taskDetails, taskSubtype } from "../src/interfaces/task-plugins.ts";
 import { summaryBatchSize, taskSummaries } from "../src/interfaces/task-summaries.ts";
 
 const typeId = "nutrition.meal";
@@ -145,5 +145,39 @@ it("hides superseded automatic data while reclassification runs and distinguishe
 		classification: "failed",
 		types: [],
 		prompts: [],
+	});
+});
+
+it("keeps rejected and opaque subtype details while projecting only active row capabilities", async () => {
+	const planner = user();
+	await planner.enable(true);
+	const rejected = await planner.create("First meal");
+	const opaque = await planner.create("Another meal");
+	const rejection = await planner.subtype(rejected.id, null, null);
+	await planner.subtype(opaque.id, null, { foods: ["Soup"] });
+	await runInDurableObject(planner.stub, (_, state) => {
+		state.storage.sql.exec(
+			"UPDATE task_subtype SET schemaVersion = 99 WHERE taskId = ?",
+			opaque.id,
+		);
+	});
+	const rows = await planner.summaries(rejected.id, opaque.id);
+	const read = async (id: string) =>
+		taskDetails.parse(
+			await (await planner.stub.fetch("https://planner.test/api/tasks/" + id + "/details")).json(),
+		);
+	const first = await read(rejected.id),
+		second = await read(opaque.id);
+	expect(first.subtypes).toContainEqual(rejection);
+	expect(second.subtypes[0]).toMatchObject({ schemaVersion: 99, data: { foods: ["Soup"] } });
+	expect(rows.find((r) => r.id === rejected.id)).toMatchObject({
+		classification: first.classification,
+		types: [],
+	});
+	expect(rows.find((r) => r.id === opaque.id)).toMatchObject({
+		classification: second.classification,
+		types: [{ typeId }],
+		prompts: [],
+		inlays: [],
 	});
 });

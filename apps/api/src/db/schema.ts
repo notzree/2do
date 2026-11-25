@@ -4,6 +4,8 @@ import type { Task } from "../interfaces/plan.ts";
 import type { TimeProposal } from "../interfaces/review.ts";
 import type { NotebookDoc, TaskCapture } from "../interfaces/notebook.ts";
 import type { TaskSubtype } from "../interfaces/task-plugins.ts";
+import type { PluginData } from "../interfaces/plugin-workflows.ts";
+export * from "./report-schema.ts";
 
 export const planHead = sqliteTable(
 	"plan_head",
@@ -114,4 +116,41 @@ export const timeProposals = sqliteTable(
 			.notNull(),
 	},
 	(t) => [index("time_proposal_pending").on(t.status, t.taskId)],
+);
+
+export const workflowStates = sqliteTable(
+	"plugin_workflow",
+	{
+		taskId: taskReference(),
+		typeId: text().notNull(),
+		version: integer().notNull(),
+		revision: text().notNull(),
+		document: text({ mode: "json" }).$type<PluginData>().notNull(),
+		suspendedChanges: text({ mode: "json" }).$type<string[]>(),
+	},
+	(t) => [primaryKey({ columns: [t.taskId, t.typeId] })],
+);
+
+export const workflowReceipts = sqliteTable("plugin_command_receipt", {
+	commandId: text().primaryKey(),
+	taskId: taskReference(),
+	signature: text().notNull(),
+	workflowRevision: text().notNull(),
+});
+
+export const workflowJobs = sqliteTable(
+	"plugin_effect",
+	{
+		taskId: taskReference(),
+		typeId: text().notNull(),
+		effect: text().notNull(),
+		token: text().notNull(),
+		epoch: text().notNull(),
+		subtypeRevision: text().notNull(),
+		workflowRevision: text().notNull(),
+		input: text({ mode: "json" }).$type<PluginData>().notNull(),
+		due: integer().notNull(),
+		attempts: integer().notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.taskId, t.typeId] }), index("plugin_effect_due").on(t.due)],
 );

@@ -111,7 +111,9 @@ export class Planner implements PlanReader {
 					throw new PlannerError(409, "This task changed. Review the current task before deleting it.");
 				const revision = this.db.revision() + 1;
 				for (const child of this.db.children(id)) {
-					this.db.update({ ...child, parentId: parent.parentId, revision });
+					const updated = { ...child, parentId: parent.parentId, revision };
+					this.db.update(updated);
+					this.onTaskChanged?.(updated, child);
 				}
 				this.db.advanceRevision();
 			}

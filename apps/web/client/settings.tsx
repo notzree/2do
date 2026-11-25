@@ -16,6 +16,7 @@ import {
 } from "./preferences.ts";
 import { shortcuts } from "./vim.ts";
 import { PluginSettings } from "./plugin-settings.tsx";
+import { GoalSettings } from "./goal-settings.tsx";
 import { sections, type Section } from "./settings-sections.ts";
 import "./settings.css";
 
@@ -198,7 +199,7 @@ export function Settings({ prefs, change, section, navigate }: Props) {
             </div>
           </section>
         )}
-        {section === "plugins" ? <PluginSettings /> : (
+        {section === "plugins" ? <PluginSettings openGoals={() => navigate("goals")} /> : section === "goals" ? <GoalSettings openPlugins={() => navigate("plugins")} /> : (
           <footer className="preferences-note">
             <Monitor size={13} /> Preferences apply on this device.
           </footer>

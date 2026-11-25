@@ -1,16 +1,23 @@
-import { and, eq, gte, isNotNull, lte, min, or, sql } from "drizzle-orm";
-import { taskSubtype, type TaskSubtype } from "../interfaces/task-plugins.ts";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, min, or, sql, type SQL } from "drizzle-orm";
+import { taskSubtype, type TaskDetails, type TaskSubtype } from "../interfaces/task-plugins.ts";
 import type { PlannerStore } from "./planner.ts";
+import { WorkflowDatabase } from "./plugin-workflows.ts";
+import { SqlitePluginReportDatabase } from "./plugin-reports.ts";
 import {
 	classificationResults,
 	installations,
 	jobs,
 	subtypes,
 	taskCaptures,
+	taskPromptSkips,
 	tasks,
+	workflowStates,
 } from "./schema.ts";
 
-export type ClassificationJob = Pick<typeof jobs.$inferSelect, "taskId" | "token" | "attempts" | "rawInput">;
+export type ClassificationJob = Pick<
+	typeof jobs.$inferSelect,
+	"taskId" | "token" | "attempts" | "rawInput"
+>;
 function lease(job: ClassificationJob) {
 	return and(
 		eq(jobs.taskId, job.taskId),
@@ -19,8 +26,51 @@ function lease(job: ClassificationJob) {
 	);
 }
 
+function visibleForTitle(title: string | SQL<string>) {
+	return or(eq(subtypes.source, "manual"), eq(subtypes.classifiedTitle, title));
+}
+
+function subtypeRecord({
+	typeId,
+	schemaVersion,
+	revision,
+	source,
+	document,
+}: typeof subtypes.$inferSelect) {
+	return taskSubtype.parse({ typeId, schemaVersion, revision, source, data: document });
+}
+
+function classificationStatus(due: number | null | undefined): TaskDetails["classification"] {
+	if (due === undefined) return "idle";
+	return due === null ? "failed" : "pending";
+}
+
 export class SqliteTaskPluginDatabase {
-	constructor(private readonly db: PlannerStore) {}
+	readonly workflows: WorkflowDatabase;
+	readonly reports: SqlitePluginReportDatabase;
+	constructor(private readonly db: PlannerStore) {
+		this.workflows = new WorkflowDatabase(db);
+		this.reports = new SqlitePluginReportDatabase(db);
+	}
+
+	storedTypes(taskId: string) {
+		return this.db.select({ typeId: subtypes.typeId, source: subtypes.source, version: subtypes.schemaVersion })
+			.from(subtypes).where(eq(subtypes.taskId,taskId)).all();
+	}
+
+	attachmentsWithoutWorkflow(typeId: string, version: number) {
+		return this.db.select({ task: tasks.document, subtype: subtypes })
+			.from(subtypes)
+			.innerJoin(tasks, eq(tasks.id, subtypes.taskId))
+			.leftJoin(workflowStates, and(eq(workflowStates.taskId, subtypes.taskId), eq(workflowStates.typeId, subtypes.typeId)))
+			.where(and(eq(subtypes.typeId, typeId), eq(subtypes.schemaVersion, version),
+				isNotNull(subtypes.document), isNull(workflowStates.taskId), visibleForTitle(sql<string>`json_extract(${tasks.document}, '$.title')`)))
+			.all().map(row => ({ task: row.task, subtype: subtypeRecord(row.subtype) }));
+	}
+
+	transaction<T>(write: () => T) {
+		return this.db.transaction(write);
+	}
 
 	installations() {
 		return new Map(
@@ -60,18 +110,72 @@ export class SqliteTaskPluginDatabase {
 		return this.db
 			.select()
 			.from(subtypes)
-			.where(
-				and(
-					eq(subtypes.taskId, taskId),
-					or(eq(subtypes.source, "manual"), eq(subtypes.classifiedTitle, title)),
-				),
-			)
+			.where(and(eq(subtypes.taskId, taskId), visibleForTitle(title)))
 			.orderBy(subtypes.typeId)
 			.all()
-			.map(({ taskId: _, classifiedTitle: _title, document, ...row }) =>
-				taskSubtype.parse({ ...row, data: document }),
-			);
+			.map(subtypeRecord);
 	}
+
+	summaryRows(ids: string[], enabledTypes: ReadonlySet<string>) {
+		const rows = this.db
+			.select({ task: tasks.document, jobId: jobs.taskId, due: jobs.due })
+			.from(tasks)
+			.leftJoin(jobs, eq(tasks.id, jobs.taskId))
+			.where(inArray(tasks.id, ids))
+			.all();
+		const matches = new Map<string, TaskSubtype[]>();
+		if (enabledTypes.size) {
+			const found = this.db
+				.select({ subtype: subtypes })
+				.from(subtypes)
+				.innerJoin(tasks, eq(tasks.id, subtypes.taskId))
+				.where(
+					and(
+						inArray(subtypes.taskId, ids),
+						isNotNull(subtypes.document),
+						visibleForTitle(sql<string>`json_extract(${tasks.document}, '$.title')`),
+					),
+				)
+				.orderBy(subtypes.typeId)
+				.all();
+			for (const { subtype } of found) {
+				if (!enabledTypes.has(subtype.typeId)) continue;
+				const list = matches.get(subtype.taskId) ?? [];
+				list.push(subtypeRecord(subtype));
+				matches.set(subtype.taskId, list);
+			}
+		}
+		const skipped = new Map<string, Set<string>>();
+		if (matches.size) {
+			const preferences = this.db
+				.select()
+				.from(taskPromptSkips)
+				.where(inArray(taskPromptSkips.taskId, [...matches.keys()]))
+				.all();
+			for (const { taskId, promptId } of preferences) {
+				const set = skipped.get(taskId) ?? new Set<string>();
+				set.add(promptId);
+				skipped.set(taskId, set);
+			}
+		}
+		return rows.map(({ task, jobId, due }) => ({
+			task,
+			classification: classificationStatus(jobId === null ? undefined : due),
+			subtypes: matches.get(task.id) ?? [],
+			skipped: skipped.get(task.id),
+		}));
+	}
+
+	setPromptSkipped(taskId: string, promptId: string, skipped: boolean) {
+		if (skipped)
+			this.db.insert(taskPromptSkips).values({ taskId, promptId }).onConflictDoNothing().run();
+		else
+			this.db
+				.delete(taskPromptSkips)
+				.where(and(eq(taskPromptSkips.taskId, taskId), eq(taskPromptSkips.promptId, promptId)))
+				.run();
+	}
+
 	putSubtype(
 		taskId: string,
 		{ typeId, data, ...fields }: TaskSubtype,
@@ -117,7 +221,7 @@ export class SqliteTaskPluginDatabase {
 	}
 	classification(taskId: string) {
 		const job = this.db.select({ due: jobs.due }).from(jobs).where(eq(jobs.taskId, taskId)).get();
-		return !job ? "idle" : job.due === null ? "failed" : "pending";
+		return classificationStatus(job?.due);
 	}
 	requestClassification(taskId: string, due: number) {
 		// An active lease already represents this request. A failed lease retains its capture input.
@@ -199,6 +303,10 @@ export class SqliteTaskPluginDatabase {
 			.get();
 	}
 	retry(job: ClassificationJob, due: number | null) {
-		this.db.update(jobs).set({ due }).where(and(lease(job), isNotNull(jobs.due))).run();
+		this.db
+			.update(jobs)
+			.set({ due })
+			.where(and(lease(job), isNotNull(jobs.due)))
+			.run();
 	}
 }

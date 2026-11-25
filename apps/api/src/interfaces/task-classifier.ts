@@ -16,7 +16,7 @@ export interface TaskClassificationResult {
 }
 
 export interface TaskClassifier {
-	/** Classify queued tasks. A missing result leaves that task eligible for retry. */
+	/** Stop external work on abort. A missing result leaves that task eligible for retry. */
 	classify(
 		inputs: readonly TaskClassificationInput[],
 		signal?: AbortSignal,

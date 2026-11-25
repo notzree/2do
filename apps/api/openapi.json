@@ -56,6 +56,246 @@
           "error"
         ]
       },
+      "MetricSeries": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "reducer": {
+                "type": "string",
+                "enum": [
+                  "sum"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "label",
+              "unit",
+              "reducer"
+            ],
+            "additionalProperties": false
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "to": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "value": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "known": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "unknown": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "value",
+                "known",
+                "unknown"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "metric",
+          "buckets"
+        ],
+        "additionalProperties": false
+      },
+      "PluginGoal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "revision": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "metric": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "reducer": {
+                "type": "string",
+                "enum": [
+                  "sum"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "label",
+              "unit",
+              "reducer"
+            ],
+            "additionalProperties": false
+          },
+          "timeZone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "effectiveFrom": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "target": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "comparator": {
+                          "type": "string",
+                          "enum": [
+                            "atLeast"
+                          ]
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "comparator",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "comparator": {
+                          "type": "string",
+                          "enum": [
+                            "atMost"
+                          ]
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "comparator",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "comparator": {
+                          "type": "string",
+                          "enum": [
+                            "between"
+                          ]
+                        },
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "comparator",
+                        "min",
+                        "max"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "effectiveFrom",
+                "target"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "revision",
+          "metric",
+          "timeZone",
+          "versions"
+        ],
+        "additionalProperties": false
+      },
       "TimeProposal": {
         "type": "object",
         "properties": {
@@ -802,6 +1042,65 @@
         },
         "required": [
           "id"
+        ],
+        "additionalProperties": false
+      },
+      "PluginCommandReceipt": {
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workflowRevision": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "commandId",
+          "workflowRevision"
+        ],
+        "additionalProperties": false
+      },
+      "PluginCommand": {
+        "type": "object",
+        "properties": {
+          "installationEpoch": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "taskRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "subtypeRevision": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workflowRevision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "installationEpoch",
+          "taskRevision",
+          "subtypeRevision",
+          "workflowRevision",
+          "commandId",
+          "input"
         ],
         "additionalProperties": false
       },
@@ -1764,6 +2063,216 @@
               "additionalProperties": false
             }
           },
+          "workflows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "installationEpoch": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "taskRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "subtypeRevision": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "workflowRevision": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "typeId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "pending": {
+                  "type": "boolean"
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "date"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "number"
+                                  ]
+                                },
+                                "min": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "text"
+                                  ]
+                                },
+                                "maxLength": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind",
+                                "maxLength"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "image"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "defaults": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "fields",
+                      "defaults"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "installationEpoch",
+                "taskRevision",
+                "subtypeRevision",
+                "workflowRevision",
+                "typeId",
+                "status",
+                "pending",
+                "actions"
+              ],
+              "additionalProperties": false
+            }
+          },
           "classification": {
             "type": "string",
             "enum": [
@@ -1884,6 +2393,133 @@
             "label": {
               "type": "string"
             },
+            "description": {
+              "type": "string"
+            },
+            "metrics": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "unit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "reducer": {
+                    "type": "string",
+                    "enum": [
+                      "sum"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "label",
+                  "unit",
+                  "reducer"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "task",
+                        "local-day"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "scopes"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "features": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "subtypeId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                  },
+                  "requires": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                      },
+                      "version": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "version"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "task",
+                      "local-day"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "subtypeId",
+                  "requires",
+                  "scope"
+                ],
+                "additionalProperties": false
+              }
+            },
             "enabled": {
               "type": "boolean"
             },
@@ -1917,6 +2553,173 @@
                   "schemaVersion": {
                     "type": "integer",
                     "exclusiveMinimum": 0
+                  },
+                  "classification": {
+                    "type": "object",
+                    "properties": {
+                      "instructions": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "threshold": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "instructions",
+                      "threshold"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "actions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "fields": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "date"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "number"
+                                    ]
+                                  },
+                                  "min": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text"
+                                    ]
+                                  },
+                                  "maxLength": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "kind",
+                                  "maxLength"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "image"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    }
                   },
                   "editor": {
                     "type": "array",
@@ -2084,6 +2887,133 @@
           "label": {
             "type": "string"
           },
+          "description": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "reducer": {
+                  "type": "string",
+                  "enum": [
+                    "sum"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "version",
+                "label",
+                "unit",
+                "reducer"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "facts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "task",
+                      "local-day"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "version",
+                "scopes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "subtypeId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                },
+                "requires": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version"
+                  ],
+                  "additionalProperties": false
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "task",
+                    "local-day"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "subtypeId",
+                "requires",
+                "scope"
+              ],
+              "additionalProperties": false
+            }
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -2117,6 +3047,173 @@
                 "schemaVersion": {
                   "type": "integer",
                   "exclusiveMinimum": 0
+                },
+                "classification": {
+                  "type": "object",
+                  "properties": {
+                    "instructions": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threshold": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "instructions",
+                    "threshold"
+                  ],
+                  "additionalProperties": false
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "date"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "number"
+                                  ]
+                                },
+                                "min": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "text"
+                                  ]
+                                },
+                                "maxLength": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind",
+                                "maxLength"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "image"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "editor": {
                   "type": "array",
@@ -2371,6 +3468,1770 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OpenAPI"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/report-settings": {
+      "get": {
+        "operationId": "getReportSettings",
+        "summary": "Read the planner reporting time zone",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timeZone": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "timeZone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setReportSettings",
+        "summary": "Set the reporting time zone; onlyIfUnset initializes it on the first device",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "onlyIfUnset": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "timeZone"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timeZone": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "timeZone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugin-metrics": {
+      "get": {
+        "operationId": "listPluginMetrics",
+        "x-mcp": true,
+        "summary": "List metrics contributed by enabled plugins",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                      },
+                      "version": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "unit": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                      },
+                      "reducer": {
+                        "type": "string",
+                        "enum": [
+                          "sum"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "version",
+                      "label",
+                      "unit",
+                      "reducer"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugin-metrics/{metricId}/series": {
+      "get": {
+        "operationId": "readMetricSeries",
+        "x-mcp": true,
+        "summary": "Read confirmed metric sums and coverage across a half-open civil-date range",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+            },
+            "required": true,
+            "name": "metricId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "day"
+            },
+            "required": false,
+            "name": "bucket",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ],
+              "default": "0"
+            },
+            "required": false,
+            "name": "weekStart",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricSeries"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/goals": {
+      "get": {
+        "operationId": "listGoals",
+        "x-mcp": true,
+        "summary": "List goals for enabled metrics with their effective-dated targets",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "revision": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "metric": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                          },
+                          "version": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "unit": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          },
+                          "reducer": {
+                            "type": "string",
+                            "enum": [
+                              "sum"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version",
+                          "label",
+                          "unit",
+                          "reducer"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "versions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "effectiveFrom": {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            "target": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "comparator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "atLeast"
+                                      ]
+                                    },
+                                    "value": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "comparator",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "comparator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "atMost"
+                                      ]
+                                    },
+                                    "value": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "comparator",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "comparator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "between"
+                                      ]
+                                    },
+                                    "min": {
+                                      "type": "number"
+                                    },
+                                    "max": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "comparator",
+                                    "min",
+                                    "max"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "effectiveFrom",
+                            "target"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "minItems": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "revision",
+                      "metric",
+                      "timeZone",
+                      "versions"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createGoal",
+        "summary": "Create a daily goal for an enabled plugin metric",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "metricId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "effectiveFrom": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "target": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "comparator": {
+                            "type": "string",
+                            "enum": [
+                              "atLeast"
+                            ]
+                          },
+                          "value": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "comparator",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "comparator": {
+                            "type": "string",
+                            "enum": [
+                              "atMost"
+                            ]
+                          },
+                          "value": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "comparator",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "comparator": {
+                            "type": "string",
+                            "enum": [
+                              "between"
+                            ]
+                          },
+                          "min": {
+                            "type": "number"
+                          },
+                          "max": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "comparator",
+                          "min",
+                          "max"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "metricId",
+                  "label",
+                  "effectiveFrom",
+                  "target"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginGoal"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/goals/{id}": {
+      "put": {
+        "operationId": "updateGoal",
+        "summary": "Change a daily target or end the goal on the effective date",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "effectiveFrom": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "target": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "comparator": {
+                            "type": "string",
+                            "enum": [
+                              "atLeast"
+                            ]
+                          },
+                          "value": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "comparator",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "comparator": {
+                            "type": "string",
+                            "enum": [
+                              "atMost"
+                            ]
+                          },
+                          "value": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "comparator",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "comparator": {
+                            "type": "string",
+                            "enum": [
+                              "between"
+                            ]
+                          },
+                          "min": {
+                            "type": "number"
+                          },
+                          "max": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "comparator",
+                          "min",
+                          "max"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "revision": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "effectiveFrom",
+                  "target",
+                  "revision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginGoal"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/goals/history": {
+      "get": {
+        "operationId": "readAllGoalHistory",
+        "x-mcp": true,
+        "summary": "Read daily outcomes and counts for all goals over a calendar range",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "goal": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "revision": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "metric": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "unit": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "reducer": {
+                                "type": "string",
+                                "enum": [
+                                  "sum"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "label",
+                              "unit",
+                              "reducer"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "timeZone": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "versions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "effectiveFrom": {
+                                  "type": "string",
+                                  "format": "date"
+                                },
+                                "target": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "comparator": {
+                                          "type": "string",
+                                          "enum": [
+                                            "atLeast"
+                                          ]
+                                        },
+                                        "value": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "comparator",
+                                        "value"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "comparator": {
+                                          "type": "string",
+                                          "enum": [
+                                            "atMost"
+                                          ]
+                                        },
+                                        "value": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "comparator",
+                                        "value"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "comparator": {
+                                          "type": "string",
+                                          "enum": [
+                                            "between"
+                                          ]
+                                        },
+                                        "min": {
+                                          "type": "number"
+                                        },
+                                        "max": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "comparator",
+                                        "min",
+                                        "max"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "effectiveFrom",
+                                "target"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "minItems": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "revision",
+                          "metric",
+                          "timeZone",
+                          "versions"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "counts": {
+                        "type": "object",
+                        "properties": {
+                          "met": {
+                            "type": "integer"
+                          },
+                          "missed": {
+                            "type": "integer"
+                          },
+                          "unknown": {
+                            "type": "integer"
+                          },
+                          "inProgress": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "met",
+                          "missed",
+                          "unknown",
+                          "inProgress"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "days": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "day": {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            "value": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "known": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "unknown": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "target": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "comparator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "atLeast"
+                                      ]
+                                    },
+                                    "value": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "comparator",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "comparator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "atMost"
+                                      ]
+                                    },
+                                    "value": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "comparator",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "comparator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "between"
+                                      ]
+                                    },
+                                    "min": {
+                                      "type": "number"
+                                    },
+                                    "max": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "comparator",
+                                    "min",
+                                    "max"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": [
+                                "met",
+                                "missed",
+                                "unknown",
+                                "inProgress"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "day",
+                            "value",
+                            "known",
+                            "unknown",
+                            "target",
+                            "outcome"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "goal",
+                      "counts",
+                      "days"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/goals/{id}/history": {
+      "get": {
+        "operationId": "readGoalHistory",
+        "x-mcp": true,
+        "summary": "Count daily outcomes using the target in effect each day",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "goal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "revision": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "metric": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "unit": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "reducer": {
+                              "type": "string",
+                              "enum": [
+                                "sum"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version",
+                            "label",
+                            "unit",
+                            "reducer"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "timeZone": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "versions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "effectiveFrom": {
+                                "type": "string",
+                                "format": "date"
+                              },
+                              "target": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "comparator": {
+                                        "type": "string",
+                                        "enum": [
+                                          "atLeast"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "comparator",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "comparator": {
+                                        "type": "string",
+                                        "enum": [
+                                          "atMost"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "comparator",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "comparator": {
+                                        "type": "string",
+                                        "enum": [
+                                          "between"
+                                        ]
+                                      },
+                                      "min": {
+                                        "type": "number"
+                                      },
+                                      "max": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "comparator",
+                                      "min",
+                                      "max"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "effectiveFrom",
+                              "target"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "minItems": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "revision",
+                        "metric",
+                        "timeZone",
+                        "versions"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "met": {
+                          "type": "integer"
+                        },
+                        "missed": {
+                          "type": "integer"
+                        },
+                        "unknown": {
+                          "type": "integer"
+                        },
+                        "inProgress": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "met",
+                        "missed",
+                        "unknown",
+                        "inProgress"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "day": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "value": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "known": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "unknown": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "target": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "comparator": {
+                                    "type": "string",
+                                    "enum": [
+                                      "atLeast"
+                                    ]
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "comparator",
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "comparator": {
+                                    "type": "string",
+                                    "enum": [
+                                      "atMost"
+                                    ]
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "comparator",
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "comparator": {
+                                    "type": "string",
+                                    "enum": [
+                                      "between"
+                                    ]
+                                  },
+                                  "min": {
+                                    "type": "number"
+                                  },
+                                  "max": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "comparator",
+                                  "min",
+                                  "max"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "met",
+                              "missed",
+                              "unknown",
+                              "inProgress"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "day",
+                          "value",
+                          "known",
+                          "unknown",
+                          "target",
+                          "outcome"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "goal",
+                    "counts",
+                    "days"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -3971,6 +6832,144 @@
         }
       }
     },
+    "/api/tasks/{id}/subtypes/{typeId}/actions/{actionId}": {
+      "post": {
+        "operationId": "runPluginAction",
+        "summary": "Run an available plugin command at its reviewed revisions. Repeat the command ID for safe replay.",
+        "x-mcp": true,
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+            },
+            "required": true,
+            "name": "typeId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}$"
+            },
+            "required": true,
+            "name": "actionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginCommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tasks/{id}/classify": {
       "post": {
         "operationId": "classifyTask",
@@ -5125,6 +8124,17 @@
             "required": true,
             "name": "to",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision."
+            },
+            "required": false,
+            "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision.",
+            "name": "expectedRevision",
+            "in": "query"
           }
         ],
         "responses": {
@@ -5215,6 +8225,17 @@
             "required": true,
             "name": "to",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision."
+            },
+            "required": false,
+            "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision.",
+            "name": "expectedRevision",
+            "in": "query"
           }
         ],
         "responses": {
@@ -5243,6 +8264,16 @@
           },
           "404": {
             "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
             "content": {
               "application/json": {
                 "schema": {

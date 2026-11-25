@@ -7,11 +7,15 @@ it("allows dependency retries in the requested state and rejects stale edits tha
 	const base = "https://planner.test/api/";
 	const read = async () => plan.parse(await (await owner.fetch(base + "tasks")).json());
 	const create = async (title: string) =>
-		task.parse(await (await owner.fetch(base + "tasks", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ title }),
-		})).json());
+		task.parse(
+			await (
+				await owner.fetch(base + "tasks", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ title }),
+				})
+			).json(),
+		);
 	const a = await create("Draft");
 	const b = await create("Review");
 	const path = base + "dependencies/" + a.id + "/" + b.id;

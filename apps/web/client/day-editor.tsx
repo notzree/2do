@@ -1,8 +1,8 @@
 import { slashKeyDown, slashPlugin, type SlashActions } from "./slash-editor.ts";
-import { api, pageQuery } from "./query.ts";
+import { pageQuery } from "./query.ts";
 import { SlashSuggestions } from "./slash-suggestions.tsx";
 import { newSideChat, selectChat, sendChat, useChats } from "./chats.ts";
-import { NotebookNavigation, notebookCommands, toggleTaskHints } from "./commands.ts";
+import { isTaskInspectorShortcut, NotebookNavigation, notebookCommands, toggleTaskHints } from "./commands.ts";
 import { useTaskPlugins } from "./task-plugin-api.ts";
 import { useQuery } from "@tanstack/react-query";
 import { boundCommand, type Bindings } from "./preferences.ts";
@@ -31,7 +31,8 @@ import {
 	Maximize2,
 	Minimize2,
 } from "lucide-react";
-import { imageReceipt, type NotebookDoc } from "@2do/api/notebook";
+import { type NotebookDoc } from "@2do/api/notebook";
+import { uploadImage } from "./upload-image.ts";
 import { dayBuffer, type DayBuffer } from "./day-buffer.ts";
 import { editorExtensions, notebookDocument } from "./editor-extensions.ts";
 import { bindNotebookEditorEvents, NotebookVim, type EditorMode } from "./editor-navigation.ts";
@@ -253,15 +254,9 @@ function WritingSurface({
 		try {
 			const images: ProseMirrorNode[] = [];
 			for (const image of files) {
-				if (image.size > 8 * 1024 * 1024) throw new Error("Choose images smaller than 8 MiB.");
-				const { data } = await api.POST("/api/images", {
-					body: image,
-					bodySerializer: (file) => file,
-					headers: { "Content-Type": image.type },
-				});
-				const receipt = imageReceipt.parse(data);
+				const id = await uploadImage(image);
 				images.push(
-					view.state.schema.nodes.image.create({ id: receipt.id, alt: image.name.slice(0, 240) }),
+					view.state.schema.nodes.image.create({ id, alt: image.name.slice(0, 240) }),
 				);
 			}
 			if (view.isDestroyed) {
@@ -349,8 +344,14 @@ function WritingSurface({
 						motion(view, "redo");
 						return true;
 					}
-					if (event.ctrlKey || event.metaKey || event.altKey) return false;
-					const key = event.key;
+					const inspect = isTaskInspectorShortcut(event);
+					if (inspect) {
+						const { selection } = view.state;
+						if (!(selection instanceof NodeSelection) || selection.node.type.name !== "taskRef")
+							return false;
+						if (event.repeat) return true;
+					} else if (event.ctrlKey || event.metaKey || event.altKey) return false;
+					const key = inspect ? "Enter" : event.key;
 					if (key === "d" && event.repeat) return true;
 					const prefix =
 						performance.now() < keySequence.current.until ? keySequence.current.key : "";

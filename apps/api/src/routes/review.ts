@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import type { Review } from "../core/review.ts";
+import type { CommitTaskWrite } from "../interfaces/database.ts";
 import {
 	decision,
 	proposeTime,
@@ -88,20 +89,23 @@ export const reviewOperations = {
 		},
 	}),
 };
-export function reviewRoutes(review: Review) {
+export function reviewRoutes(review: Review, commit: CommitTaskWrite) {
 	const app = new OpenAPIHono<PlannerCaller>();
 	app.openapi(reviewOperations.listReview, (c) => c.json(review.pending(), 200));
 	app.openapi(reviewOperations.listRecentDecisions, (c) => c.json(review.recent(), 200));
 	app.openapi(reviewOperations.proposeTime, (c) =>
 		c.json(review.propose(c.req.valid("json"), c.env?.fromAgent ? "copilot" : "user"), 200),
 	);
-	app.openapi(reviewOperations.decideTime, (c) => {
+	app.openapi(reviewOperations.decideTime, async (c) => {
 		requireUser(c.env?.fromAgent);
-		return c.json(review.decide(c.req.valid("param").id, c.req.valid("json").decision), 200);
+		return c.json(
+			await commit(() => review.decide(c.req.valid("param").id, c.req.valid("json").decision)),
+			200,
+		);
 	});
-	app.openapi(reviewOperations.undoTime, (c) => {
+	app.openapi(reviewOperations.undoTime, async (c) => {
 		requireUser(c.env?.fromAgent);
-		return c.json(review.undo(c.req.valid("param").id), 200);
+		return c.json(await commit(() => review.undo(c.req.valid("param").id)), 200);
 	});
 	return app;
 }

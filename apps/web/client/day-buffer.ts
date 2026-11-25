@@ -48,13 +48,15 @@ export class DayBuffer {
 		this.store.setState({ ...next, backupWarning: this.checkpoint(next) }, true);
 	}
 	private checkpoint(next: Snapshot) {
-		if (!this.scope || !next.page) return;
+		if (!next.page) return;
+		if (!this.scope) return this.dirty ? "Account not verified for browser backup. Keep this tab open until saved." : undefined;
 		try {
 			if (!this.dirty) { this.journal?.clear(); return; }
 			if (!this.journal) throw new Error();
 			this.journal.save(this.writeBody(next.page.doc), this.retryBody, next.status === "Conflict");
 		} catch {
-			return "Browser backup unavailable. Keep this tab open until the page is saved.";
+			return this.dirty ? "Browser backup unavailable. Keep this tab open until the page is saved."
+				: "Saved online. This browser could not clear its draft backup.";
 		}
 	}
 	private writeBody(doc: NotebookDoc): WritePage {
@@ -85,7 +87,7 @@ export class DayBuffer {
 		for (const task of tasks) this.optimisticTitles.delete(task.id);
 	}
 	receive(page: DayPage & { plannerScope?: string }, discard = false): void | Promise<void> {
-		if (page.plannerScope && !this.scope && !this.state.page) {
+		if (page.plannerScope && !this.scope && !this.dirty && !this.running) {
 			this.scope = page.plannerScope;
 			this.opening = this.restoreDraft(page, page.plannerScope).finally(() => { this.opening = undefined; });
 			return this.opening;
@@ -229,7 +231,9 @@ export class DayBuffer {
 			try {
 				const result = await api.GET("/api/days/{date}", { params: { path: { date: this.date } } });
 				authoritative = dayPage.parse(result.data);
-				queryClient.setQueryData(pageQuery(this.date).queryKey, authoritative);
+				queryClient.setQueryData(pageQuery(this.date).queryKey, {
+					...authoritative, plannerScope: result.response.headers.get(plannerScopeHeader) ?? this.scope,
+				});
 			} catch {
 				// The planner invalidates its queries after this mutation, including failed reads.
 			}

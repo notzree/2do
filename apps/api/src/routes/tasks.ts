@@ -10,6 +10,7 @@ import {
 	missing,
 } from "./responses.ts";
 import { jsonLimits } from "./json-body.ts";
+import { actionId, workflowCommand, workflowReceipt } from "../interfaces/plugin-workflows.ts";
 import type { Planner } from "../core/planner.ts";
 import { HTTPException } from "hono/http-exception";
 import type { TaskClassification } from "../core/task-classification.ts";
@@ -44,10 +45,33 @@ const taskParams = z.object({ id: taskId });
 const dependencyQuery = z.object({
 	expectedRevision: z.string().regex(/^(0|[1-9][0-9]*)$/)
 		.refine((value) => Number.isSafeInteger(Number(value)), "Invalid plan revision")
-		.optional().describe("Plan revision reviewed by the caller. An already-applied change succeeds at any revision."),
+		.optional()
+		.describe(
+			"Plan revision reviewed by the caller. An already-applied change succeeds at any revision.",
+		),
 });
 
 export const taskOperations = {
+	runPluginAction: createRoute({
+		operationId: "runPluginAction",
+		method: "post",
+		path: "/api/tasks/{id}/subtypes/{typeId}/actions/{actionId}",
+		summary:
+			"Run an available plugin command at its reviewed revisions. Repeat the command ID for safe replay.",
+		"x-mcp": true,
+		middleware: jsonLimits(),
+		request: {
+			params: z.object({ id: taskId, typeId: subtypeId, actionId }),
+			body: jsonBody(named(workflowCommand, "PluginCommand")),
+		},
+		responses: {
+			200: jsonResponse(named(workflowReceipt, "PluginCommandReceipt")),
+			...accessErrors,
+			...jsonErrors,
+			404: missing,
+			409: conflict,
+		},
+	}),
 	classifyTask: createRoute({
 		operationId: "classifyTask",
 		method: "post",
@@ -275,6 +299,13 @@ export function plannerRoutes(
 ) {
 	const app = new OpenAPIHono<PlannerCaller>();
 	const op = taskOperations;
+	app.openapi(op.runPluginAction, async (c) => {
+		const { id, typeId, actionId } = c.req.valid("param");
+		return c.json(
+			await plugins.workflows.command(id, typeId, actionId, c.req.valid("json"), commit),
+			200,
+		);
+	});
 	app.openapi(op.classifyTask, async (c) => {
 		if (!classification)
 			return c.json({ error: "Workers AI is unavailable in this planner." }, 503);
@@ -305,9 +336,9 @@ export function plannerRoutes(
 		);
 	});
 	app.openapi(op.readTaskDetails, (c) => c.json(plugins.details(c.req.valid("param").id), 200));
-	app.openapi(op.writeTaskSubtype, (c) => {
+	app.openapi(op.writeTaskSubtype, async (c) => {
 		const { id, typeId } = c.req.valid("param");
-		return c.json(plugins.write(id, typeId, c.req.valid("json")), 200);
+		return c.json(await commit(() => plugins.write(id, typeId, c.req.valid("json"))), 200);
 	});
 	app.openapi(op.listTaskPlugins, (c) => c.json(plugins.installations(), 200));
 	app.openapi(op.setTaskPluginEnabled, async (c) => {
@@ -315,9 +346,14 @@ export function plannerRoutes(
 		const { enabled } = c.req.valid("json");
 		return c.json(await commit(() => plugins.setEnabled(pluginId, enabled)), 200);
 	});
-	app.openapi(op.deleteTask, (c) => {
+	app.openapi(op.deleteTask, async (c) => {
 		const { expectedRevision, withPages } = c.req.valid("query");
-		const receipt = planner.remove(c.req.valid("param").id, expectedRevision === undefined ? undefined : Number(expectedRevision));
+		const receipt = await commit(() =>
+			planner.remove(
+				c.req.valid("param").id,
+				expectedRevision === undefined ? undefined : Number(expectedRevision),
+			),
+		);
 		if (withPages === "true") return c.json(receipt, 200);
 		return c.body(null, 204);
 	});

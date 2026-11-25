@@ -9,9 +9,8 @@ import {
 	unsupported,
 } from "./responses.ts";
 import { bodyLimit } from "hono/body-limit";
-import { imageId, imageReceipt } from "../interfaces/notebook.ts";
-import type { PlannerStore } from "../db/planner.ts";
-import { images } from "../db/schema.ts";
+import { imageId, imageReceipt, maxImageBytes } from "../interfaces/images.ts";
+import type { PlannerImages } from "../db/planner-images.ts";
 
 const binary = { schema: { type: "string", format: "binary" } } as const;
 const imageContent = {
@@ -28,7 +27,7 @@ export const imageOperations = {
 		path: "/api/images",
 		summary: "Upload a private PNG, JPEG, GIF or WebP, up to 8 MiB",
 		middleware: bodyLimit({
-			maxSize: 8 * 1024 * 1024,
+			maxSize: maxImageBytes,
 			onError: (c) => c.json({ error: "Images must be 8 MiB or smaller" }, 413),
 		}),
 		request: { body: { required: true, content: imageContent } },
@@ -61,23 +60,18 @@ function imageType(bytes: Uint8Array) {
 	if (prefix.startsWith("GIF89a") || prefix.startsWith("GIF87a")) return "image/gif";
 	if (prefix.startsWith("RIFF") && prefix.slice(8) === "WEBP") return "image/webp";
 }
-export function imageRoutes(owner: string, db: PlannerStore, bucket: R2Bucket) {
+export function imageRoutes(images: PlannerImages) {
 	const app = new OpenAPIHono();
-	const key = (id: string) => owner + "/" + id;
 	app.openapi(imageOperations.uploadImage, async (c) => {
 		const bytes = new Uint8Array(await c.req.arrayBuffer());
 		const type = imageType(bytes);
 		if (!type || type !== c.req.header("Content-Type"))
 			return c.json({ error: "Choose a PNG, JPEG, GIF or WebP image" }, 415);
-		const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-		const id = Array.from(hash, (b) => b.toString(16).padStart(2, "0")).join("");
-		await bucket.put(key(id), bytes, { httpMetadata: { contentType: type } });
-		db.insert(images).values({ id }).onConflictDoNothing().run();
-		return c.json({ id }, 201);
+		return c.json(await images.save(bytes, type), 201);
 	});
 	app.openapi(imageOperations.readImage, async (c) => {
 		const { id } = c.req.valid("param");
-		const object = await bucket.get(key(id));
+		const object = await images.read(id);
 		if (!object) return c.json({ error: "Image unavailable" }, 404);
 		return new Response(object.body, {
 			headers: {
