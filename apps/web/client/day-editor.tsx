@@ -1,3 +1,5 @@
+import { useStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { slashKeyDown, slashPlugin, type SlashActions } from "./slash-editor.ts";
 import { pageQuery } from "./query.ts";
 import { SlashSuggestions } from "./slash-suggestions.tsx";
@@ -16,7 +18,6 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	useSyncExternalStore,
 } from "react";
 import { NotebookReferences } from "./notebook-reference.tsx";
 import { Extension } from "@tiptap/core";
@@ -70,7 +71,15 @@ export function DayEditor({
 }: DayProps) {
 	const date = dayKey(day),
 		buffer = dayBuffer(date);
-	const state = useSyncExternalStore(buffer.subscribe, buffer.get);
+	const state = useStore(buffer, useShallow((snapshot) => ({
+		generation: snapshot.page ? buffer.generation : null,
+		conflict: snapshot.status === "Conflict",
+		error: snapshot.error,
+		backupWarning: snapshot.backupWarning,
+	})));
+	const refs = useStore(buffer, useShallow((snapshot) => new Set(
+		snapshot.page?.doc.content.flatMap((node) => node.type === "taskRef" ? [node.attrs.id] : []),
+	)));
 	const page = useQuery(pageQuery(date));
 	useEffect(() => {
 		if (page.data) buffer.receive(page.data);
@@ -85,9 +94,6 @@ export function DayEditor({
 		[buffer],
 	);
 	const error = state.error ?? page.error?.message;
-	const refs = new Set(
-		state.page?.doc.content.flatMap((n) => (n.type === "taskRef" ? [n.attrs.id] : [])) ?? [],
-	);
 	const scheduled = actions.plan.tasks.filter((t) => onDay(t, day) && !refs.has(t.id));
 	return (
 		<article
@@ -120,9 +126,9 @@ export function DayEditor({
 				)}
 			</div>
 			{scheduled.length > 0 && <TaskList tasks={scheduled} {...actions} />}
-			{state.page ? (
+			{state.generation !== null ? (
 				<WritingSurface
-					key={buffer.generation}
+					key={state.generation}
 					buffer={buffer}
 					vim={vim}
 					bindings={bindings}
@@ -137,7 +143,7 @@ export function DayEditor({
 			{error && (
 				<div className="page-error" role="alert">
 					{error}{" "}
-					{state.status === "Conflict" ? (
+					{state.conflict ? (
 						<button
 							onClick={async () => {
 								if (window.confirm("Discard the local draft and load the saved page?")) {
@@ -149,7 +155,7 @@ export function DayEditor({
 						</button>
 					) : (
 						<button
-							onClick={() => void (state.error && state.page ? buffer.flush() : page.refetch())}
+							onClick={() => void (state.error && state.generation !== null ? buffer.flush() : page.refetch())}
 						>
 							Retry
 						</button>
@@ -209,7 +215,7 @@ function WritingSurface({
 	const [message, setMessage] = useState("");
 	const [uploading, setUploading] = useState(0);
 	const [marks, setMarks] = useState<string[]>([]);
-	const status = useSyncExternalStore(buffer.subscribe, buffer.get).status;
+	const status = useStore(buffer, (snapshot) => snapshot.status);
 	useEffect(() => {
 		if (active) window.dispatchEvent(new CustomEvent("notebook-mode", { detail: vim ? mode : "Editing" }));
 	}, [active, mode, vim]);

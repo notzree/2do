@@ -7437,6 +7437,18 @@
         "responses": {
           "200": {
             "description": "Success",
+            "headers": {
+              "X-Planner-Task-Observations": {
+                "description": "Whether the task had metric observations before or after this update.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "0",
+                    "1"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {

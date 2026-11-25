@@ -1,3 +1,4 @@
+import { taskObservationsHeader } from "../interfaces/plugin-reports.ts";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import {
 	accessErrors,
@@ -156,7 +157,15 @@ export const taskOperations = {
 		middleware: jsonLimits(),
 		request: { params: taskParams, body: jsonBody(named(patchTask, "PatchTask")) },
 		responses: {
-			200: jsonResponse(named(task, "Task")),
+			200: {
+				...jsonResponse(named(task, "Task")),
+				headers: {
+					[taskObservationsHeader]: {
+						description: "Whether the task had metric observations before or after this update.",
+						schema: { type: "string", enum: ["0", "1"] },
+					},
+				},
+			},
 			...accessErrors,
 			...jsonErrors,
 			404: missing,
@@ -321,19 +330,21 @@ export function plannerRoutes(
 	app.openapi(op.updateTask, async (c) => {
 		const { id } = c.req.valid("param");
 		const patch = c.req.valid("json");
-		return c.json(
-			await commit(() => {
-				if (c.env?.fromAgent && patch.schedule !== undefined) {
-					const current = planner.get(id).schedule;
-					if (current?.type === "fixed" && !sameTime(patch.schedule, current))
-						throw new HTTPException(409, {
-							message: "Use proposeTime for a fixed event. Its schedule requires user review.",
-						});
-				}
-				return planner.update(id, patch);
-			}),
-			200,
-		);
+		const { updated, measured } = await commit(() => {
+			if (c.env?.fromAgent && patch.schedule !== undefined) {
+				const current = planner.get(id).schedule;
+				if (current?.type === "fixed" && !sameTime(patch.schedule, current))
+					throw new HTTPException(409, {
+						message: "Use proposeTime for a fixed event. Its schedule requires user review.",
+					});
+			}
+			const reports = plugins.workflows.reports;
+			const previouslyMeasured = reports.hasObservations(id);
+			const updated = planner.update(id, patch);
+			return { updated, measured: previouslyMeasured || reports.hasObservations(id) };
+		});
+		c.header(taskObservationsHeader, measured ? "1" : "0");
+		return c.json(updated, 200);
 	});
 	app.openapi(op.readTaskDetails, (c) => c.json(plugins.details(c.req.valid("param").id), 200));
 	app.openapi(op.writeTaskSubtype, async (c) => {

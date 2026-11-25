@@ -62,3 +62,18 @@ it("keeps legacy remaps and assigns unused keys to new date commands", () => {
   expect(bindings).not.toHaveProperty("day");
   expect(new Set(Object.values(bindings)).size).toBe(Object.keys(defaultBindings).length);
 });
+
+it("rehydrates flat preferences, saves compatible JSON, and restores defaults after storage is cleared", async () => {
+  const values = new Map([[storageKey, JSON.stringify({ theme: "nord", weekStart: 1 })]]);
+  const setItem = vi.fn((key: string, value: string) => values.set(key, value));
+  vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem });
+  const { usePreferences } = await import("./preference-store.ts");
+  await usePreferences.persist.rehydrate();
+  expect(usePreferences.getState()).toMatchObject({ theme: "nord", mode: "system", weekStart: 1 });
+  usePreferences.setState({ mode: "light" });
+  expect(JSON.parse(values.get(storageKey)!)).toEqual({ ...defaults, theme: "nord", mode: "light", weekStart: 1 });
+  values.clear();
+  await usePreferences.persist.rehydrate();
+  expect(usePreferences.getState()).toEqual(defaults);
+  expect(setItem).toHaveBeenCalledTimes(1);
+});

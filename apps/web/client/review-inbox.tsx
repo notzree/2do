@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CalendarClock, Check, Inbox, Undo2, X } from "lucide-react";
 import type { Task } from "@2do/api/plan";
 import type { components } from "./openapi.d.ts";
 import { api, queryClient } from "./query.ts";
+import { refreshPlannerChange, reviewKey } from "./planner-cache.ts";
 import { localTime } from "./task-edits.ts";
 import "./review-inbox.css";
 
-const reviewKey = ["planner", "review"] as const;
-function usePendingReview() {
+
+export function usePendingReview() {
 	return useQuery({
 		queryKey: reviewKey,
 		queryFn: async ({ signal }) => {
@@ -17,18 +18,6 @@ function usePendingReview() {
 		},
 	});
 }
-export function useReviewInbox() {
-	const query = usePendingReview();
-	const [open, setOpen] = useState(false);
-	const close = useCallback(() => setOpen(false), []);
-	return {
-		pendingCount: query.data?.length ?? 0,
-		open,
-		show: () => setOpen(true),
-		close,
-	};
-}
-
 export function ProposeTime({ task }: { task: Task }) {
 	const [draft, setDraft] = useState<{
 		start: string;
@@ -177,8 +166,10 @@ function ProposalCard({
 					? "Time updated. Undo is available in Recent decisions."
 					: "Proposal rejected.",
 			);
-			return queryClient.invalidateQueries({ queryKey: ["planner"] });
 		},
+		onSettled: (_, __, decision) => decision === "accept"
+			? refreshPlannerChange(queryClient, { kind: "reviewSchedule", id: proposal.taskId }, true)
+			: queryClient.invalidateQueries({ queryKey: reviewKey }),
 	});
 	return (
 		<article className="proposal-card">
@@ -223,7 +214,7 @@ function RecentDecision({
 	const undo = useMutation({
 		mutationFn: () => api.POST("/api/review/{id}/undo", { params: { path: { id: proposal.id } } }),
 		onSuccess: onUndo,
-		onSettled: () => queryClient.invalidateQueries({ queryKey: ["planner"] }),
+		onSettled: () => refreshPlannerChange(queryClient, { kind: "reviewSchedule", id: proposal.taskId }, true),
 	});
 	return (
 		<li className="recent-decision">

@@ -36,6 +36,11 @@ export class SqlitePluginReportDatabase {
     return this.settings();
   }
 
+  hasObservations(taskId: string) {
+    return !!this.store.select({ id: observations.taskId }).from(observations)
+      .where(eq(observations.taskId, taskId)).limit(1).get();
+  }
+
   replaceObservations(
     taskId: string,
     typeId: string,

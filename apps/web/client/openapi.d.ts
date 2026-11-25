@@ -3986,6 +3986,8 @@ export interface operations {
             /** @description Success */
             200: {
                 headers: {
+                    /** @description Whether the task had metric observations before or after this update. */
+                    "X-Planner-Task-Observations"?: "0" | "1";
                     [name: string]: unknown;
                 };
                 content: {

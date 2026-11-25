@@ -25,6 +25,8 @@ const deletions = new Map<string, { expectedRevision?: number; result: Promise<v
 export class DayBuffer {
 	private readonly store = createStore<Snapshot>(() => ({ status: "Loading" }));
 	get = this.store.getState;
+	getState = this.store.getState;
+	getInitialState = this.store.getInitialState;
 	subscribe = this.store.subscribe;
 	private get state() {
 		return this.store.getState();
@@ -324,10 +326,16 @@ export function deleteNotebookTask(id: string, expectedRevision?: number) {
 					: cached,
 			);
 		}
+		return pages && changes;
 	}).finally(() => {
 		deletions.delete(id);
 		for (const buffer of days.values()) buffer.resumeAfterDeletion();
-	});
+	}).then((changed) => queryClient.invalidateQueries({
+		// Revalidate after releasing the deletion guard so buffers can receive the reply.
+		// A lost receipt cannot identify the affected dates.
+		queryKey: ["planner", "day"],
+		predicate: ({ queryKey }) => !changed || changed.has(String(queryKey[2])),
+	}));
 	deletions.set(id, { expectedRevision, result });
 	return result;
 }

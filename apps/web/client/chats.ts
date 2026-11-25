@@ -1,3 +1,4 @@
+import { setActivePanel } from "./workspace-panels.ts";
 import { dayKey } from "./calendar.ts";
 import { create } from "zustand";
 import { queryOptions } from "@tanstack/react-query";
@@ -20,11 +21,10 @@ type Composer = {
 };
 export const emptyComposer: Composer = { draft: "" };
 export const useChats = create<{
-	open: boolean;
 	selected: string;
 	composers: Record<string, Composer>;
 	focus: number;
-}>(() => ({ open: false, selected: "me", composers: {}, focus: 0 }));
+}>(() => ({ selected: "me", composers: {}, focus: 0 }));
 
 function update(id: string, patch: Partial<Composer>) {
 	useChats.setState((s) => ({
@@ -32,7 +32,8 @@ function update(id: string, patch: Partial<Composer>) {
 	}));
 }
 export function selectChat(id: string) {
-	useChats.setState((s) => ({ open: true, selected: id, focus: s.focus + 1 }));
+	useChats.setState((s) => ({ selected: id, focus: s.focus + 1 }));
+	setActivePanel({ kind: "chat" });
 }
 export function newSideChat() {
 	const empty = Object.entries(useChats.getState().composers).find(

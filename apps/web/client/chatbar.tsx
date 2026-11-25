@@ -1,3 +1,4 @@
+import { setActivePanel, useWorkspacePanels } from "./workspace-panels.ts";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as Menu from "@radix-ui/react-dropdown-menu";
@@ -129,18 +130,7 @@ function EmptyChat({
 }
 
 export function Chatbar() {
-	const open = useChats((s) => s.open);
 	const id = useChats((s) => s.selected);
-	if (!open)
-		return (
-			<button
-				className="copilot-fab"
-				aria-label="Open the agent chat"
-				onClick={() => selectChat(id)}
-			>
-				<AgentMark /> Agent
-			</button>
-		);
 	return <ChatPanel key={id} id={id} />;
 }
 
@@ -198,10 +188,11 @@ function ChatPanel({ id }: { id: string }) {
 		!settled.has(last.submissionId) &&
 		last.parts.some((part) => (part.type === "text" && part.text) || part.type === "dynamic-tool");
 	function close() {
-		useChats.setState({ open: false });
-		requestAnimationFrame(() =>
-			document.querySelector<HTMLButtonElement>("[data-chat-launch]")?.focus({ preventScroll: true }),
-		);
+		setActivePanel(null);
+		requestAnimationFrame(() => {
+			if (useWorkspacePanels.getState().activePanel) return;
+			document.querySelector<HTMLButtonElement>("[data-chat-launch]")?.focus({ preventScroll: true });
+		});
 	}
 	function suggest(text: string) {
 		setDraft(id, text);

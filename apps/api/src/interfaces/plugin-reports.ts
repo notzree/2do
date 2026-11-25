@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const taskObservationsHeader = "X-Planner-Task-Observations";
+
 // Kept independent of task-plugins: plugin manifests embed these definitions.
 const metricId = z.string().regex(/^[a-z][a-z0-9-]{0,63}\.[a-z][a-z0-9-]{0,63}$/);
 export const metricDefinition = z.strictObject({

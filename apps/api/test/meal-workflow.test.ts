@@ -1,3 +1,4 @@
+import { taskObservationsHeader } from "../src/interfaces/plugin-reports.ts";
 import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { expect, it } from "vite-plus/test";
 import { taskDetails } from "../src/interfaces/task-plugins.ts";
@@ -32,7 +33,10 @@ it("confirms and corrects meals through notebook capture, projects daily goals, 
     ).buckets;
   async function capture(id: string, title: string) {
     const t = await get(id);
-    await ok("tasks/" + id, "PATCH", { revision: t.task.revision, completed: true });
+    const completed = await request("tasks/" + id, "PATCH", { revision: t.task.revision, completed: true });
+    expect(completed.status).toBe(200);
+    expect(completed.headers.get(taskObservationsHeader)).toBe("0");
+    await completed.arrayBuffer();
     await ok(sub(id), "PUT", { revision: t.subtypes[0].revision, data: { foods: [title] } });
   }
   async function command(
@@ -92,7 +96,12 @@ it("confirms and corrects meals through notebook capture, projects daily goals, 
   expect((await daily())[1].value).toBe(55);
   expect(await history()).toMatchObject({ counts: { met: 0, missed: 1 } });
   // A schedule move changes the plan. A user correction changes the recorded consumption day.
-  await patch(b, { schedule: { type: "day", date: dayBefore } });
+  const moved = await request("tasks/" + b, "PATCH", {
+    revision: (await get(b)).task.revision, schedule: { type: "day", date: dayBefore },
+  });
+  expect(moved.status).toBe(200);
+  expect(moved.headers.get(taskObservationsHeader)).toBe("1");
+  await moved.arrayBuffer();
   expect((await daily()).map((x) => x.value)).toEqual([null, 55]);
   await confirm(b, await command(b, { day: dayBefore, proteinGrams: 30 }));
   expect((await daily()).map((x) => x.value)).toEqual([30, 25]);

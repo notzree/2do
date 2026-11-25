@@ -1,3 +1,4 @@
+import { useInspectorPrompts } from "./task-summary-api.ts";
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, PanelRight, X } from "lucide-react";
@@ -7,7 +8,7 @@ import { dayKey, scheduleStart, timeRange } from "./calendar.ts";
 import { DependencyGraph } from "./graph.tsx";
 import type { Mutate } from "./use-plan.ts";
 import { api } from "./query.ts";
-import { InspectorPrompt, SkippedHints, useInspectorPrompts } from "./task-hints.tsx";
+import { InspectorPrompt, SkippedHints } from "./task-hints.tsx";
 import { ProposeTime } from "./review-inbox.tsx";
 import { TaskSubtypes } from "./task-subtypes.tsx";
 import { taskForm, prepareTaskEdit, type TaskForm } from "./task-edits.ts";

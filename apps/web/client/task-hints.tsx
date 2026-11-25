@@ -1,95 +1,24 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Ellipsis, Sparkles, X } from "lucide-react";
-import { queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type { Task } from "@2do/api/plan";
-import { summaryBatchSize, taskSummaries, type TaskSummary } from "@2do/api/task-summaries";
-import { dayKey, onDay } from "./calendar.ts";
-import { api, pageQuery, queryClient } from "./query.ts";
+import type { TaskSummary } from "@2do/api/task-summaries";
+import { summariesKey, type useWeekTaskHints } from "./task-summary-api.ts";
+import { api, queryClient } from "./query.ts";
 import { PromptFields, TaskSubtypes } from "./task-subtypes.tsx";
 import { TaskTypeIcon } from "./task-type-icon.tsx";
 import "./task-hints.css";
 
-const summariesKey = ["planner", "summaries"] as const;
 const Summaries = createContext<ReadonlyMap<string, TaskSummary>>(new Map());
 
-function summaryQuery(ids: string[]) {
-  return queryOptions({
-    queryKey: [...summariesKey, ids],
-    queryFn: async ({ signal }) =>
-      taskSummaries.parse(
-        (
-          await api.POST("/api/tasks/summaries", {
-            body: { ids },
-            signal,
-          })
-        ).data,
-      ),
-    refetchInterval: (q) =>
-      q.state.data?.some((s) => s.classification === "pending") ? 1500 : false,
-  });
-}
-
-export function WeekTaskHints({
-  days,
-  tasks,
-  includeUnscheduled,
-  onStatus,
-  children,
-}: {
-  days: Date[];
-  tasks: Task[];
-  includeUnscheduled: boolean;
-  onStatus?: (status: string) => void;
+export function WeekTaskHints({ hints, children }: {
+  hints: ReturnType<typeof useWeekTaskHints>;
   children: ReactNode;
 }) {
-  // Observers share the day editors' query cache, including references to tasks scheduled elsewhere.
-  const pages = useQueries({ queries: days.map((d) => pageQuery(dayKey(d))) });
-  const references = new Set(
-    pages.flatMap(
-      ({ data }) =>
-        data?.doc.content.flatMap((n) => (n.type === "taskRef" ? [n.attrs.id] : [])) ?? [],
-    ),
-  );
-  const ids = tasks
-    .filter(
-      (t) =>
-        references.has(t.id) ||
-        (includeUnscheduled && !t.schedule) ||
-        days.some((d) => onDay(t, d)),
-    )
-    .map((t) => t.id)
-    .sort();
-  const batches = [];
-  for (let i = 0; i < ids.length; i += summaryBatchSize) {
-    batches.push(summaryQuery(ids.slice(i, i + summaryBatchSize)));
-  }
-  const queries = useQueries({ queries: batches });
-  const summaries = new Map(
-    queries.flatMap(({ data }) => (data ?? []).map((s) => [s.id, s] as const)),
-  );
-  const pending = [...summaries.values()].filter((s) => s.classification === "pending").length;
-  const failed = queries.filter((q) => q.isError);
-  const rejected = [...summaries.values()].some((s) => s.classification === "failed");
-  const status = failed.length
-    ? "Hints unavailable"
-    : pending
-      ? `Classifying ${pending} ${pending === 1 ? "task" : "tasks"}`
-      : rejected
-        ? "Classification failed"
-        : queries.some((q) => q.isPending)
-          ? "Checking hints"
-          : "Ready";
-  useEffect(() => {
-    onStatus?.(status);
-  }, [onStatus, status]);
+  const { summaries, failed } = hints;
   return (
     <Summaries.Provider value={summaries}>
       {children}
-      {!onStatus && pending > 0 && (
-        <small className="hint-status" role="status">
-          Classifying {pending} {pending === 1 ? "task" : "tasks"}…
-        </small>
-      )}
       {failed.length > 0 && (
         <div className="hint-status" role="status">
           Task hints unavailable.{" "}
@@ -138,10 +67,6 @@ function PromptPreference({
       {mutation.isError && <small role="alert">{mutation.error.message}</small>}
     </>
   );
-}
-
-export function useInspectorPrompts(taskId: string) {
-  return useQuery(summaryQuery([taskId])).data?.[0]?.prompts ?? [];
 }
 
 export function InspectorPrompt({

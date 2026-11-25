@@ -1,13 +1,18 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { taskObservationsHeader } from "@2do/api/plugin-reports";
+import { refreshPlannerChange, type PlannerChange } from "./planner-cache.ts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { plan } from "@2do/api/plan";
 import type { components } from "./openapi.d.ts";
-import { api, planKey, queryClient } from "./query.ts";
+import { api, planKey } from "./query.ts";
 import { deleteNotebookTask } from "./day-buffer.ts";
 
 export type Mutate = ReturnType<typeof usePlan>["mutate"];
 
+type Write = { change: PlannerChange; execute: () => Promise<{ response: Response } | void> };
+
 export function usePlan() {
+	const client = useQueryClient();
 	const pendingDeletes = useRef(new Map<string, Promise<boolean>>());
 	const query = useQuery({
 		queryKey: planKey,
@@ -15,12 +20,20 @@ export function usePlan() {
 	});
 	const mutation = useMutation({
 		scope: { id: "planner-writes" },
-		mutationFn: (write: () => Promise<unknown>) => write(),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: ["planner"] }),
+		mutationFn: ({ execute }: Write) => execute(),
+		onSettled: (result, error, { change }) => {
+			const measured = change.kind === "delete" ||
+				(change.kind === "update" && result?.response.headers.get(taskObservationsHeader) !== "0");
+			return Promise.all([
+				refreshPlannerChange(client, change, measured),
+				// An interrupted DELETE can lose its page receipt.
+				change.kind === "delete" && error && client.invalidateQueries({ queryKey: ["planner", "day"] }),
+			]);
+		},
 	});
-	async function run(write: () => Promise<unknown>) {
+	async function run(change: PlannerChange, execute: Write["execute"]) {
 		try {
-			await mutation.mutateAsync(write);
+			await mutation.mutateAsync({ change, execute });
 			return true;
 		} catch {
 			return false;
@@ -33,21 +46,21 @@ export function usePlan() {
 		busy: mutation.isPending,
 		mutate: {
 			createTask: (body: components["schemas"]["CreateTask"]) =>
-				run(() => api.POST("/api/tasks", { body })),
+				run({ kind: "create", id: body.id }, () => api.POST("/api/tasks", { body })),
 			updateTask: (id: string, body: components["schemas"]["PatchTask"]) =>
-				run(() => api.PATCH("/api/tasks/{id}", { params: { path: { id } }, body })),
+				run({ kind: "update", id }, () => api.PATCH("/api/tasks/{id}", { params: { path: { id } }, body })),
 			deleteTask: (id: string) => {
 				const pending = pendingDeletes.current.get(id);
 				if (pending) return pending;
 				const expectedRevision = query.data?.tasks.find((task) => task.id === id)?.revision;
-				const result = run(() => deleteNotebookTask(id, expectedRevision)).finally(() => pendingDeletes.current.delete(id));
+				const result = run({ kind: "delete", id }, () => deleteNotebookTask(id, expectedRevision)).finally(() => pendingDeletes.current.delete(id));
 				pendingDeletes.current.set(id, result);
 				return result;
 			},
 			addDependency: (from: string, to: string) =>
-				run(() => api.PUT("/api/dependencies/{from}/{to}", { params: { path: { from, to }, query: edgeRevision } })),
+				run({ kind: "dependency" }, () => api.PUT("/api/dependencies/{from}/{to}", { params: { path: { from, to }, query: edgeRevision } })),
 			removeDependency: (from: string, to: string) =>
-				run(() => api.DELETE("/api/dependencies/{from}/{to}", { params: { path: { from, to }, query: edgeRevision } })),
+				run({ kind: "dependency" }, () => api.DELETE("/api/dependencies/{from}/{to}", { params: { path: { from, to }, query: edgeRevision } })),
 		},
 	};
 }
