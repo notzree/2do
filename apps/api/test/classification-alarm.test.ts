@@ -65,15 +65,20 @@ it("delivers captured notebook work after the HTTP response and permits writes w
 
 it("keeps an existing wake on cold start and recovers a missing wake from durable jobs", async () => {
 	const f = await fixture("pass");
-	await f.call("tasks","POST",{id:f.id,title:dinner});
-	await f.enable(true);
+	const created = await f.call("tasks","POST",{id:f.id,title:dinner});
+	expect(created.status).toBe(201);
+	// Consume each response before eviction so its stream no longer holds the object active.
+	await created.arrayBuffer();
+	const enabled = await f.enable(true);
+	expect(enabled.status).toBe(200);
+	await enabled.arrayBuffer();
 	const due=Date.now()+600_000, existing=due+60_000;
 	await f.stage(due,1);
 	await runInDurableObject(f.stub,async (_,ctx)=>{ await ctx.storage.setAlarm(existing); });
-	console.log("Starting fixture eviction"); await evictDurableObject(f.stub); console.log("Finished fixture eviction");
+	await evictDurableObject(f.stub);
 	expect(await f.stats()).toMatchObject({job:{due,attempts:1},alarm:existing, calls:0});
 	await runInDurableObject(f.stub,async (_,ctx)=>{ await ctx.storage.deleteAlarm(); });
-	console.log("Starting fixture eviction"); await evictDurableObject(f.stub); console.log("Finished fixture eviction");
+	await evictDurableObject(f.stub);
 	expect(await f.stats()).toMatchObject({job:{due,attempts:1},alarm:due});
 	await f.deliver();
 	expect(await f.read()).toMatchObject({classification:"idle",subtypes:[{typeId:"nutrition.meal",source:"automatic"}]});

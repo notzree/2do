@@ -5125,6 +5125,17 @@
             "required": true,
             "name": "to",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision."
+            },
+            "required": false,
+            "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision.",
+            "name": "expectedRevision",
+            "in": "query"
           }
         ],
         "responses": {
@@ -5215,6 +5226,17 @@
             "required": true,
             "name": "to",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision."
+            },
+            "required": false,
+            "description": "Plan revision reviewed by the caller. An already-applied change succeeds at any revision.",
+            "name": "expectedRevision",
+            "in": "query"
           }
         ],
         "responses": {
@@ -5243,6 +5265,16 @@
           },
           "404": {
             "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
             "content": {
               "application/json": {
                 "schema": {
