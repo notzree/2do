@@ -148,3 +148,71 @@ it("identifies manual types and suppresses redundant reclassification", () => {
   expect(confirmed).not.toContain("Classify task");
   expect(confirmed).not.toContain("Inferred by Clef");
 });
+
+it.each(["manual", "automatic"] as const)(
+  "offers all %s subtype fields and other enabled types in the compact panel",
+  (source) => {
+    const client = new QueryClient();
+    client.setQueryData(
+      ["planner", "plugins"],
+      [
+        {
+          id: "study",
+          label: "Study",
+          enabled: true,
+          subtypes: [
+            {
+              id: "study.session",
+              label: "Session",
+              schemaVersion: 1,
+              editor: [
+                {
+                  fields: [
+                    {
+                      key: "topics",
+                      kind: "text-list",
+                      label: "Target topics",
+                      maxItems: 8,
+                      maxLength: 100,
+                    },
+                  ],
+                },
+              ],
+            },
+            { id: "study.exam", label: "Exam", schemaVersion: 1 },
+          ],
+        },
+        {
+          id: "disabled",
+          label: "Disabled",
+          enabled: false,
+          subtypes: [{ id: "disabled.type", label: "Hidden type", schemaVersion: 1 }],
+        },
+      ],
+    );
+    client.setQueryData(["planner", "details", task.id], {
+      task,
+      classification: "idle",
+      subtypes: [
+        {
+          typeId: "study.session",
+          source,
+          data: { topics: ["Math"] },
+          revision: crypto.randomUUID(),
+          schemaVersion: 1,
+        },
+      ],
+    });
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={client}>
+        <TaskSubtypes task={task} active openPlugins={() => {}} compact />
+      </QueryClientProvider>,
+    );
+    expect(markup).toContain("Edit Session details");
+    expect(markup).toContain("Target topics");
+    expect(markup).toContain("Math");
+    expect(markup).toContain("Add Exam");
+    expect(markup).not.toContain("Hidden type");
+    expect(markup).toContain(source === "manual" ? "User-confirmed" : "Inferred by Clef");
+  },
+);

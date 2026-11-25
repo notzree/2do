@@ -1,4 +1,6 @@
 import { createContext } from "react";
+import type { EditorView } from "@tiptap/pm/view";
+import { lineStart } from "./editor-keys.ts";
 import type { TaskPluginInstallation, TaskTypeIconName } from "@2do/api/task-plugins";
 import type { Command } from "./preferences.ts";
 import { nextPeriods, previousPeriods } from "./calendar.ts";
@@ -59,6 +61,22 @@ export function toggleTaskHints(row: Element | null) {
 	if (!toggle?.getClientRects().length) return false;
 	toggle.click();
 	return true;
+}
+
+export function toggleSelectedTaskHints(view: EditorView) {
+	const pos = lineStart(view);
+	if (view.state.doc.nodeAt(pos)?.type.name !== "taskRef") return false;
+	const row = view.nodeDOM(pos);
+	return row instanceof Element && toggleTaskHints(row);
+}
+
+/** Only task-level controls may close a panel; its fields keep their focus. */
+export function toggleFocusedTaskHints(target: HTMLElement) {
+	const row = target.closest(".task-row, .embedded.taskRef");
+	if (!row) return false;
+	const isTaskControl = target.matches("button[data-task], button[data-task-enrich]") ||
+		(target.matches('input[type="checkbox"]') && target.parentElement === row);
+	return isTaskControl && toggleTaskHints(row);
 }
 
 export const NotebookNavigation = createContext<{

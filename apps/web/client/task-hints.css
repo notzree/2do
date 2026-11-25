@@ -268,3 +268,12 @@
   border-radius: 50%;
   border: 1px solid var(--accent);
 }
+
+.task-hints .editor :is(input, textarea) { margin: 0; }
+.task-hints .task-subtypes-compact { gap: .45rem; margin: .65rem 0 0; padding-top: .55rem; }
+.task-subtypes-compact h3 { font-size: .78rem; }
+.task-subtypes-compact .subtype-card { gap: .4rem; padding: .6rem; }
+.task-subtypes-compact .subtype-card h4 { font-size: .8rem; }
+.task-subtypes-compact .type-edit { margin: 0; }
+.task-subtypes-compact .type-edit > summary { color: var(--accent); cursor: pointer; }
+.task-subtypes-compact .type-add { margin-top: .4rem; }
