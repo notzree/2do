@@ -83,6 +83,15 @@ function fixture() {
   return { stub, ok, goal, goals, enable, change, details, request, capture, log };
 }
 
+async function budgetingMigrationFixture() {
+  const planner = fixture();
+  // Disable classification before capturing tasks so its alarms cannot race eviction.
+  await runInDurableObject(planner.stub, (_, ctx) => ctx.storage.kv.put("test:no-classifier", true));
+  await evictDurableObject(planner.stub);
+  await planner.enable("budgeting");
+  return planner;
+}
+
 it("captures plain goals atomically and distinguishes contributions, milestones and check-ins", async () => {
   const f = fixture(),
     id = crypto.randomUUID(),
@@ -353,10 +362,9 @@ it("abstains on malformed, conflicting, or multiple payment amounts", () => {
 });
 
 it("protects pre-upgrade confirmed logs and leaves an unconfirmed suggestion title-bound", async () => {
-  const f = fixture(),
+  const f = await budgetingMigrationFixture(),
     type = "budgeting.expense",
     day = "2026-11-25";
-  await f.enable("budgeting");
   const logged = await f.capture(type, "EUR 18,50 for supplies"),
     draft = await f.capture(type, "CAD 1,250 for rent");
   await f.log(logged.task.id, type, "pay", { day, currency: "EUR", amount: 18.5 });
@@ -408,8 +416,7 @@ it.each(["-", "–", "—", "−", " to ", "/"])(
 );
 
 it("keeps the legacy amount out of defaults after renaming and reopening the planner", async () => {
-  const f = fixture();
-  await f.enable("budgeting");
+  const f = await budgetingMigrationFixture();
   const type = "budgeting.expense";
   const expense = await f.capture(type, "Paid 1,250 CAD for rent");
   const edited = await f.capture(type, "Paid 1,250 CAD for rent");
@@ -454,8 +461,7 @@ it("keeps the legacy amount out of defaults after renaming and reopening the pla
 });
 
 it("repairs a v1 partial amount before rename and accepts an explicit price edit afterward", async () => {
-  const f = fixture();
-  await f.enable("budgeting");
+  const f = await budgetingMigrationFixture();
   const expense = await f.capture("budgeting.expense", "Paid 1,250 CAD for rent");
   await runInDurableObject(f.stub, (_, ctx) => {
     ctx.storage.sql.exec(
