@@ -142,3 +142,10 @@
 		padding: 0.4rem 0.2rem;
 	}
 }
+
+.planner-goals article { padding: .75rem 0; border-bottom: 1px solid var(--line); }
+.planner-goals .goal-summary { display:flex; align-items:baseline; justify-content:space-between; width:100%; gap:1rem; text-align:left; }
+.goal-summary span, .planner-goals small { font-size:.8rem; }
+.goal-detail { display:grid; gap:.65rem; padding: .75rem 0; }
+.goal-detail h3, .goal-detail p, .goal-detail ul { margin:0; }
+.goal-detail select { max-width:100%; }

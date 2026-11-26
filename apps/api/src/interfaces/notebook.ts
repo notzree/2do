@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { taskId } from "./plan.ts";
+import { taskId, timeZone } from "./plan.ts";
 import { subtypeId } from "./task-plugins.ts";
 import { imageId } from "./images.ts";
 export { imageId, imageReceipt, imageMimeTypes, maxImageBytes } from "./images.ts";
@@ -20,7 +20,7 @@ const prose = z.strictObject({
 	content: z.array(text).optional(),
 });
 const reference = z.strictObject({
-	type: z.enum(["taskRef", "graphRef"]),
+	type: z.enum(["taskRef", "graphRef", "goalRef"]),
 	attrs: z.strictObject({ id: taskId }),
 });
 const image = z.strictObject({
@@ -50,19 +50,7 @@ const captureContext = {
 		.date()
 		.optional()
 		.describe("Local calendar date when the user entered the task."),
-	timeZone: z
-		.string()
-		.min(1)
-		.max(100)
-		.refine((zone) => {
-			try {
-				new Intl.DateTimeFormat("en", { timeZone: zone });
-				return true;
-			} catch {
-				return false;
-			}
-		}, "Unknown time zone")
-		.optional(),
+	timeZone: timeZone.optional(),
 };
 export const taskCapture = z.strictObject({
 	rawInput,
@@ -75,16 +63,18 @@ export const newTask = z
 		id: taskId,
 		title: z.string().trim().min(1).max(240),
 		rawInput: rawInput.optional(),
+		alias: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/).optional(),
 		typeId: subtypeId.optional().describe("Explicitly attach an enabled subtype with a capture command."),
 		...captureContext,
 	})
+	.refine(item=>!item.alias || !!item.typeId,"A capture alias requires a subtype.")
 	.refine(
 		(item) =>
 			item.rawInput !== undefined ||
 			(item.captureDate === undefined && item.timeZone === undefined),
 		"Capture context requires raw input.",
 	);
-export const writePage = dayPage.extend({ newTasks: z.array(newTask).max(500) });
+export const writePage = dayPage.extend({ newTasks: z.array(newTask).max(500), newGoals: z.array(z.strictObject({ id:z.uuid(),title:z.string().trim().min(1).max(240) })).max(500).optional() });
 export type DayPage = z.infer<typeof dayPage>;
 export type NotebookDoc = DayPage["doc"];
 export type WritePage = z.infer<typeof writePage>;

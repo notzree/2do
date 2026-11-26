@@ -478,6 +478,7 @@ function PlannerView({
           : prefs.keysEnabled ? editorMode === "Insert" ? "/ commands · Esc normal" : "j/k move · o capture · e details" : "/ commands"}</span>
         <span className="status-state" role="status"><i />{hintStatus}</span>
         <button type="button" data-chat-launch onClick={() => runCommand("copilot")}><Sparkles size={12}/> Agent</button>
+        <button type="button" onClick={() => openSettings("goals")}>Goals</button>
         <button type="button" onClick={() => openSettings("keybinds")}><Keyboard size={13}/> Keymap</button>
       </footer>
     );

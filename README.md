@@ -16,7 +16,7 @@ npm run dev
 
 Open http://localhost:5173 and select **Sign in**. The development build uses one local planner on loopback hosts. Production builds require a valid Access JWT. Local state persists between dev-server restarts. The API dev server reads `apps/api/.dev.vars`; copy `apps/api/.dev.vars.example` there once to enable the shared local planner.
 
-Local inference uses your Cloudflare account through the API Worker's remote `AI` binding. SQLite and R2 use local storage. From `apps/api`, run `npx wrangler whoami` to check which account the dev server can use. If you need to sign in, run `npx wrangler login` there and restart `npm run dev` from the repository root. Enable **Nutrition** under **Settings → Plugins**, then capture `/task Have dinner at Nuri Village`. A high-confidence Clef match adds the Meal chip while you keep typing. [Cloudflare local binding behavior](https://developers.cloudflare.com/workers/local-development/#remote-bindings)
+Local inference uses your Cloudflare account through the API Worker's remote `AI` binding. SQLite and R2 use local storage. From `apps/api`, run `npx wrangler whoami` to check which account the dev server can use. If you need to sign in, run `npx wrangler login` there and restart `npm run dev` from the repository root. Enable **Nutrition** under **Settings → Plugins**, then capture `/task Have dinner at Nuri Village`. A winning Clef match adds the Meal chip while you keep typing. [Cloudflare local binding behavior](https://developers.cloudflare.com/workers/local-development/#remote-bindings)
 
 Week is the default planner view. With the default bindings, `g w` opens Week, `g c` opens Month, and `g d` advances one day. Use `j` and `k` to focus tasks, `h` and `l` to fold and unfold subtasks, `o` to add a task, and `x` to toggle completion. Press `?` for your current shortcuts.
 
@@ -31,6 +31,10 @@ Open an existing task and choose **Classify task** or **Recheck types** to run C
 Use `/agent` for the main chat and `/side` for a new side chat. Press Enter on the command to open its sidebar composer, or press Space, write your message inline, and press Enter to send. The first message names a side chat. Open the panel with `g a` and use its conversation selector to revisit a thread.
 
 Open a task to edit its schedule, nest it under a parent, or add prerequisites. The Graph tab follows prerequisites from top to bottom across dates. A task's optional `parentId` controls its place in the outline. Deleting a parent promotes its direct children one level.
+
+## Google connectors
+
+Open **Settings → Connections** to install read-only Gmail intake or choose Google Calendar sync directions. Publish individual scheduled events from their inspector. [OAuth, webhook setup and sync behavior](docs/google-connectors.md)
 
 ## Planner API
 
@@ -74,11 +78,32 @@ Open **Settings → Plugins** to inspect a plugin's types, fields, commands and 
 
 Set the reporting time zone and create a target in **Settings → Goals**. Open the month calendar's **Reports** view for daily, weekly and monthly totals and goal outcomes. A missing nutrient contributes unknown coverage. An explicitly logged zero counts as a measured value.
 
+### Goals and task plugins
+
+Capture `/goal Feel ready for interviews` in the notebook or choose **Goals → New goal**. Add a target date or next check-in when useful. A goal can link to several tasks and a task can support several goals. **Contributes** records work toward the goal. **Completes goal** makes the goal satisfied while that task is complete. You can also mark a goal achieved manually. Opening a notebook goal or the Goals panel shows links and dated check-in notes.
+
+Enable the plugins you want under **Settings → Plugins**.
+
+| Plugin | Capture | Logging and goal rules |
+| --- | --- | --- |
+| Fitness | `/activity`, `/workout`, `/cardio`, `/sport` | Record actual activity, minutes and optional distance. Track sessions per Monday–Sunday week or a distance and time reached on one run. |
+| Budgeting | `/expense` | Confirm the amount, currency and payment date. Set a monthly spending-limit goal in CAD, USD, EUR, GBP or JPY. Corrections replace the original payment. |
+| Productivity | `/work`, `/deadline` | Record focus minutes and weekly sessions. Deliverables use the task completion checkbox and a separate optional due date or instant. |
+| Nutrition | `/meal` | Confirm meal intake and track existing daily metric targets. |
+
+For example, `Draft proposal Thursday 2–3pm, due Friday 5pm` can have a scheduled work block and a distinct due marker. `/deadline Submit Lab 3 Friday` creates a date-only deadline. Use the task inspector to edit the due date or optional local time. Confirmed session and payment logs support corrections and removal, independently of planned duration or price.
+
+Core goals are available at `/api/planner-goals`. The existing `/api/goals` daily metric API retains its target history and maps each target to the same core goal ID. Use `npm run eval:plugins -w @2do/api` to run the labeled synthetic Clef evaluation with the Cloudflare CLI.
+
 Enable Nutrition under **Settings → Plugins**. Create or rename a task to classify it in the background, or add Meal manually in the inspector. A matching Week row shows a Meal chip. Complete the task to make the optional foods hint available. Expand the hint with the pointer or `e` on the selected task, then enter foods or skip the prompt. Saved foods appear on the row. The inspector can restore skipped hints.
 
 Task subtypes are plugin-owned records attached to the same task ID. The API enables Nutrition with `PUT /api/task-plugins/nutrition` and `{"enabled":true}`. Read `GET /api/tasks/{id}/details` for subtype data and classification status. A Meal match starts with empty data. Use `PUT /api/tasks/{id}/subtypes/nutrition.meal` with its current `revision` and `{"foods":["Bibimbap"]}` in `data` to record what you ate. Use a null revision to attach a subtype for the first time, or null data to reject a subtype. The details response includes the revision of rejected entries so they can be reattached explicitly.
 
-The planner accepts any implementation of `TaskClassifier`. The Workers AI adapter sends each eligible subtype’s matching rule directly to Clef as a yes/no question. Each request contains one task’s current capture text or title. Its eligible subtypes share the request, split into groups of up to 64 questions when necessary. `TASK_CLASSIFICATION_BATCH_SIZE` controls how many tasks one planner alarm can claim (default 8). Each task gets its own result and retry. Automatic matches are tied to the task title examined by the classifier. Re-enabling a plugin queues outdated matches for reclassification. Manual entries and rejections survive these changes.
+Task creation asks Workers AI Clairic for typed dates, clock times, deadlines, and durations from the title or full notebook capture. Saving continues without inferred fields if the model is unavailable. For example, `/task Dinner at 7pm for 45 minutes: salmon and rice` starts at 7pm on the notebook day in the capture timezone. A date such as “tomorrow” uses the local capture date. A start time alone gets a one-hour calendar block and leaves the duration field empty. Explicit task fields take priority. A rename can fill a missing duration or add a clock time to an unscheduled or all-day task. The original wording stays intact.
+
+Once a subtype wins, a separate durable job uses Clairic to fill the subtype’s opted-in fields. With `/meal`, the planner extracts the task’s date, time, and duration during the save, attaches Meal as the chosen subtype, and queues food extraction. Both `/task` and explicit plugin commands also run Clef against every subtype from every enabled plugin, including the one chosen at capture. Meal extracts named foods, leaving nutrient estimation and confirmation in the existing workflow. The inspector and notebook summaries refresh while extraction is pending.
+
+The planner accepts any implementation of `TaskClassifier`. The Workers AI adapter sends each eligible subtype’s matching rule directly to Clef as a yes/no question. Each request contains one task’s current capture text or title. Its eligible subtypes share the request, split into groups of up to 64 questions when necessary. `TASK_CLASSIFICATION_BATCH_SIZE` controls how many tasks one planner alarm can claim (default 8). The highest-scoring eligible subtype wins if its score is strictly above 0.5. Equal scores use plugin and subtype registration order. Each task gets its own result and retry. Automatic matches are tied to the task title examined by the classifier. Re-enabling a plugin rechecks outdated or competing automatic matches. Manual entries and rejections survive these changes.
 
 Run `npm run eval:meal -w @2do/api` with an authenticated `cf` CLI to score 24 synthetic meal and errand entries using the production prompt and adapter. The report lists each probability, missed meals and false positives at the plugin’s cutoff.
 

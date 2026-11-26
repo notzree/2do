@@ -117,7 +117,12 @@ it("checks a pre-existing task, reports a real negative result and preserves man
 		lastClassification: { evaluated: ["nutrition.meal"], matched: [] },
 	});
 	await call(path + "/subtypes/nutrition.meal", "PUT", { revision: null, data: null });
-	expect((await call(path + "/classify", "POST")).status).toBe(409);
+	expect((await call(path + "/classify", "POST")).status).toBe(202);
+	await runInDurableObject(stub, async (instance) => { await instance.alarm!(); });
+	expect(taskDetails.parse(await (await call(path + "/details")).json())).toMatchObject({
+		subtypes: [{ typeId: "nutrition.meal", source: "manual", data: null }],
+		lastClassification: { evaluated: ["nutrition.meal"], matched: [] },
+	});
 	await call("task-plugins/nutrition", "PUT", { enabled: false });
 	expect(
 		taskDetails.parse(await (await call(path + "/details")).json()).lastClassification,

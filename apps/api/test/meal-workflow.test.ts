@@ -1,12 +1,12 @@
 import { taskObservationsHeader } from "../src/interfaces/plugin-reports.ts";
-import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { expect, it } from "vite-plus/test";
 import { taskDetails } from "../src/interfaces/task-plugins.ts";
 import { metricSeries } from "../src/interfaces/plugin-reports.ts";
 import { workflowReceipt, type WorkflowCommand } from "../src/interfaces/plugin-workflows.ts";
 
 it("confirms and corrects meals through notebook capture, projects daily goals, and reconciles disabled edits", async () => {
-  const planner = env.USER_PLANNER.getByName(crypto.randomUUID());
+  let planner = env.USER_PLANNER.getByName(crypto.randomUUID());
   const request = (path: string, method = "GET", body?: object) =>
     planner.fetch("https://planner.test/api/" + path, {
       method,
@@ -107,7 +107,10 @@ it("confirms and corrects meals through notebook capture, projects daily goals, 
   expect((await daily()).map((x) => x.value)).toEqual([30, 25]);
   // Wait for the separate capture classifier to release its alarm before forcing eviction.
   await expect.poll(() => runInDurableObject(planner, (_, ctx) => ctx.storage.getAlarm()), { timeout: 8000 }).toBeNull();
-  await evictDurableObject(planner);
+  // Restart from committed storage. workerd graceful eviction can wait for the idle alarm event.
+  await expect(runInDurableObject(planner, (_, ctx) => ctx.abort("test planner restart"))).rejects.toThrow();
+  planner = env.USER_PLANNER.get(planner.id);
+
   expect((await daily()).map((x) => x.value)).toEqual([30, 25]);
   const beforeReinstall = await command(b, { day: dayBefore, proteinGrams: 99 });
   await enable(false);

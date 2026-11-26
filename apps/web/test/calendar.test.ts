@@ -1,6 +1,6 @@
 import { expect, it } from "vite-plus/test";
 import { task } from "@2do/api/plan";
-import { dayKey, monthDays, nextDate, onDay, previousDate, weekDays, weekOfMonth } from "../client/calendar.ts";
+import { carryoverShadowLabel, dayKey, dueLabel, monthDays, nextDate, onDay, previousDate, weekDays, weekOfMonth } from "../client/calendar.ts";
 
 it.each([
   ["2026-12-31", "nextDay", "2027-01-01"],
@@ -26,6 +26,22 @@ it("renders a whole Sunday-first month including adjacent years", () => {
   expect(days[0].getDay()).toBe(0);
   expect(dayKey(days[0])).toBe("2026-12-27");
   expect(dayKey(days.at(-1)!)).toBe("2027-02-06");
+});
+
+it.each([
+  { type: "day", date: "2027-01-31" },
+  { type: "time", at: new Date(2027, 0, 31, 23, 30).toISOString(), timeZone: "UTC" },
+] as const)("keeps a $type deadline visible after two carryovers", (due) => {
+  const item = task.parse({
+    id: crypto.randomUUID(), title: "Submit report", kind: "task", revision: 3,
+    completed: false, durationMinutes: null, parentId: null, due,
+    carriedFrom: ["2027-01-31", "2027-02-01"], currentDay: "2027-02-02",
+    schedule: { type: "day", date: "2027-02-02" },
+  });
+  const days = [new Date(2027, 0, 31), new Date(2027, 1, 1), new Date(2027, 1, 2)];
+  expect(days.map(day => onDay(item, day))).toEqual([true, false, true]);
+  expect(carryoverShadowLabel(item, "2027-01-31")).toContain(dueLabel(item));
+  expect(carryoverShadowLabel(item, "2027-02-01")).toBe("Submit report · Moved to 2027-02-02");
 });
 
 it.each([

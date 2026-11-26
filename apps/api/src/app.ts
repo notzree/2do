@@ -1,3 +1,4 @@
+import { connectors } from "./connectors/router.ts";
 import { env } from "cloudflare:workers";
 import { instrument, setProvider } from "@flue/runtime";
 import { createCloudflareTracing } from "@flue/runtime/cloudflare";
@@ -31,6 +32,7 @@ app.use(async (c, next) => {
 	await next();
 	c.header("Cache-Control", "no-store");
 });
+app.route("/", connectors);
 app.openapi(publicOperations.health, (c) => c.json({ status: "ok" } as const, 200));
 app.all(publicOperations.health.path, (c) => {
 	c.header("Allow", "GET");

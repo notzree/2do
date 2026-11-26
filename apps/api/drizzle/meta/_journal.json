@@ -50,6 +50,34 @@
       "when": 1795583807648,
       "tag": "0006_plugin_workflows",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795656966850,
+      "tag": "0007_subtype_extraction",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795656986273,
+      "tag": "0008_calendar_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795720763631,
+      "tag": "0009_planner_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795722682017,
+      "tag": "0010_preserve_confirmed_logs",
+      "breakpoints": true
     }
   ]
 }

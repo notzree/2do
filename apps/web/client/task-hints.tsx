@@ -202,6 +202,9 @@ export function TaskHints({
           <ChevronDown size={12} aria-hidden="true" />
         </button>
         {meta && <span>{meta}</span>}
+        {!!task.carriedFrom?.length && <span className="muted" title={`Carried from ${task.carriedFrom.join(", ")}`}>
+          {task.createdDate ? "Created " + task.createdDate : "Carried from " + task.carriedFrom[0]} · carried {task.carriedFrom.length}×
+        </span>}
         {inlays.map((v) => (
           <span
             key={v.typeId + "." + v.field}

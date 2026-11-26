@@ -1,5 +1,8 @@
+import { carryoverOperations } from "./carryover.ts";
+import { goalOperations } from "./goals.ts";
 import { createRoute, OpenAPIHono, z, type RouteConfig } from "@hono/zod-openapi";
 import { jsonResponse } from "./responses.ts";
+import { connectionOperations } from "./connections.ts";
 import { chatOperations } from "./chats.ts";
 import { imageOperations } from "./images.ts";
 import { notebookOperations } from "./notebook.ts";
@@ -29,6 +32,8 @@ export const publicOperations = {
 
 export const plannerOperations = {
 	...reportOperations,
+	...carryoverOperations,
+	...goalOperations,
 	...reviewOperations,
 	...summaryOperations,
 	...chatOperations,
@@ -44,7 +49,7 @@ export function openApiDocument() {
 		in: "cookie",
 		name: "CF_Authorization",
 	});
-	for (const route of Object.values({ ...publicOperations, ...plannerOperations })) {
+	for (const route of Object.values({ ...publicOperations, ...plannerOperations, ...connectionOperations })) {
 		// Runtime middleware belongs to the Worker and is not part of the document.
 		const { middleware, ...definition }: RouteConfig = route;
 		app.openAPIRegistry.registerPath(definition);

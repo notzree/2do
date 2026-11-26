@@ -1,3 +1,5 @@
+import { CarryoverSettings } from "./carryover.tsx";
+import { Connections } from "./connections.tsx";
 import {
   Check,
   Monitor,
@@ -180,6 +182,7 @@ export function Settings({ prefs, change, section, navigate }: Props) {
             </details>
           </>
         )}
+        {section === "calendar" && <CarryoverSettings />}
         {section === "calendar" && (
           <section className="setting-row">
             <div>
@@ -199,9 +202,9 @@ export function Settings({ prefs, change, section, navigate }: Props) {
             </div>
           </section>
         )}
-        {section === "plugins" ? <PluginSettings openGoals={() => navigate("goals")} /> : section === "goals" ? <GoalSettings openPlugins={() => navigate("plugins")} /> : (
+        {section === "connections" ? <Connections /> : section === "plugins" ? <PluginSettings openGoals={() => navigate("goals")} /> : section === "goals" ? <GoalSettings openPlugins={() => navigate("plugins")} /> : (
           <footer className="preferences-note">
-            <Monitor size={13} /> Preferences apply on this device.
+            <Monitor size={13} /> Appearance, shortcuts and week start apply on this device.
           </footer>
         )}
       </div>

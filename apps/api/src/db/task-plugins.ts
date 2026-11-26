@@ -1,10 +1,12 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte, min, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, exists, gte, inArray, isNotNull, isNull, lte, min, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { taskSubtype, type TaskDetails, type TaskSubtype } from "../interfaces/task-plugins.ts";
 import type { PlannerStore } from "./planner.ts";
 import { WorkflowDatabase } from "./plugin-workflows.ts";
 import { SqlitePluginReportDatabase } from "./plugin-reports.ts";
 import {
 	classificationResults,
+	extractionJobs,
 	installations,
 	jobs,
 	subtypes,
@@ -53,6 +55,11 @@ export class SqliteTaskPluginDatabase {
 		this.reports = new SqlitePluginReportDatabase(db);
 	}
 
+	originalCapture(taskId: string) {
+		return this.db.select({ document: taskCaptures.document }).from(taskCaptures)
+			.where(eq(taskCaptures.taskId, taskId)).get()?.document.rawInput;
+	}
+
 	storedTypes(taskId: string) {
 		return this.db.select({ typeId: subtypes.typeId, source: subtypes.source, version: subtypes.schemaVersion })
 			.from(subtypes).where(eq(subtypes.taskId,taskId)).all();
@@ -91,7 +98,17 @@ export class SqliteTaskPluginDatabase {
 					.get()
 			: !!this.db.delete(installations).where(eq(installations.id, id)).returning().get();
 	}
-	staleAutomatic(typeId: string) {
+	automaticToRecheck(typeId: string, enabledPeers: string[]) {
+		const peer = alias(subtypes, "peer");
+		const title = sql<string>`json_extract(${tasks.document}, '$.title')`;
+		const competingMatch = enabledPeers.length
+			? exists(this.db.select({ id: peer.taskId }).from(peer).where(and(
+				eq(peer.taskId, subtypes.taskId),
+				inArray(peer.typeId, enabledPeers),
+				eq(peer.source, "automatic"),
+				eq(peer.classifiedTitle, title),
+			)))
+			: undefined;
 		return this.db
 			.select({ id: subtypes.taskId })
 			.from(subtypes)
@@ -100,7 +117,7 @@ export class SqliteTaskPluginDatabase {
 				and(
 					eq(subtypes.typeId, typeId),
 					eq(subtypes.source, "automatic"),
-					sql`${subtypes.classifiedTitle} IS NOT json_extract(${tasks.document}, '$.title')`,
+					or(sql`${subtypes.classifiedTitle} IS NOT ${title}`, competingMatch),
 				),
 			)
 			.all()
@@ -114,6 +131,12 @@ export class SqliteTaskPluginDatabase {
 			.orderBy(subtypes.typeId)
 			.all()
 			.map(subtypeRecord);
+	}
+
+	extracting(ids: string[]) {
+		const rows = this.db.selectDistinct({ id: extractionJobs.taskId }).from(extractionJobs)
+			.where(inArray(extractionJobs.taskId, ids)).all();
+		return new Set(rows.map(({ id }) => id));
 	}
 
 	summaryRows(ids: string[], enabledTypes: ReadonlySet<string>) {
@@ -190,6 +213,13 @@ export class SqliteTaskPluginDatabase {
 				set: changes,
 			})
 			.run();
+	}
+	confirmAutomatic(taskId: string, typeId: string, revision: string) {
+		return this.db.update(subtypes)
+			.set({ source: "manual", classifiedTitle: null, revision: crypto.randomUUID() })
+			.where(and(eq(subtypes.taskId, taskId), eq(subtypes.typeId, typeId),
+				eq(subtypes.source, "automatic"), eq(subtypes.revision, revision)))
+			.returning({ revision: subtypes.revision }).get();
 	}
 	removeAutomatic(taskId: string, typeId: string) {
 		this.db

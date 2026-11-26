@@ -21,13 +21,16 @@
 	},
 	"r2_buckets": [{ "binding": "NOTEBOOK_IMAGES", "bucket_name": "2do-notebook-images" }],
 	"durable_objects": {
-		"bindings": [{ "name": "USER_PLANNER", "class_name": "UserPlanner" }]
+		"bindings": [{ "name": "USER_PLANNER", "class_name": "UserPlanner" },
+			{ "name": "GOOGLE_CONNECTION", "class_name": "GoogleConnection" },
+			{ "name": "GMAIL_DIRECTORY", "class_name": "GmailDirectory" }]
 	},
 	// Flue generates one Durable Object class per agent (Copilot ->
 	// FlueCopilotAgent) and injects the FLUE_COPILOT_AGENT binding at build
 	// time. Keep the ordered history: append new tags, never rewrite them.
 	"migrations": [
 		{ "tag": "v1", "new_sqlite_classes": ["UserPlanner"] },
-		{ "tag": "flue-class-FlueCopilotAgent", "new_sqlite_classes": ["FlueCopilotAgent"] }
+		{ "tag": "flue-class-FlueCopilotAgent", "new_sqlite_classes": ["FlueCopilotAgent"] },
+		{ "tag": "google-connectors-v1", "new_sqlite_classes": ["GoogleConnection", "GmailDirectory"] }
 	]
 }

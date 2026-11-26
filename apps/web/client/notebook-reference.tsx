@@ -3,13 +3,14 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { GripVertical } from "lucide-react";
 import type { Task } from "@2do/api/plan";
 import type { DayBuffer } from "./day-buffer.ts";
-import type { ListActions } from "./agenda.tsx";
+import { TaskList, type ListActions } from "./agenda.tsx";
 import { DependencyGraph } from "./graph.tsx";
-import { timeRange } from "./calendar.ts";
+import { GoalReference } from "./planner-goals.tsx";
+import { carryoverShadowLabel, timeRange, dueLabel, isCarryoverShadow } from "./calendar.ts";
 import { TaskTitle } from "./task-title.tsx";
 import { TaskHints } from "./task-hints.tsx";
 
-export const NotebookReferences = createContext<{ actions: ListActions; buffer: DayBuffer } | null>(
+export const NotebookReferences = createContext<{ actions: ListActions; buffer: DayBuffer; nested: Map<string, Task[]> } | null>(
   null,
 );
 
@@ -27,8 +28,9 @@ function GraphEmbed({ task, actions }: { task: Task; actions: ListActions }) {
 export function NotebookReference({ node, selected }: NodeViewProps) {
   const context = useContext(NotebookReferences);
   if (!context) throw new Error("Missing notebook reference context");
-  const { actions, buffer } = context;
+  const { actions, buffer, nested } = context;
   const id: string = node.attrs.id;
+  if (node.type.name==="goalRef") return <NodeViewWrapper contentEditable={false} className="embedded goalRef"><GoalReference id={id}/></NodeViewWrapper>;
   const task = actions.plan.tasks.find((item) => item.id === id);
   return (
     <NodeViewWrapper
@@ -43,6 +45,8 @@ export function NotebookReference({ node, selected }: NodeViewProps) {
       </span>
       {node.type.name === "graphRef" && task ? (
         <GraphEmbed task={task} actions={actions} />
+      ) : task && isCarryoverShadow(task, buffer.date) ? (
+        <span className="muted">{carryoverShadowLabel(task, buffer.date)}</span>
       ) : (
         <>
           <input
@@ -67,7 +71,7 @@ export function NotebookReference({ node, selected }: NodeViewProps) {
               <TaskHints
                 task={task}
                 inspect={() => actions.open(task)}
-                meta={timeRange(task)}
+                meta={[timeRange(task),dueLabel(task)].filter(Boolean).join(" · ")}
                 title={
                   <TaskTitle task={task} update={actions.mutate.updateTask}
                     className={"embed-title" + (task.completed ? " done" : "")} />
@@ -76,6 +80,7 @@ export function NotebookReference({ node, selected }: NodeViewProps) {
             ) : (
               <span className="pending-title">{buffer.taskTitle(id) ?? "Unavailable task"}</span>
             )}
+            {nested.has(id) && <TaskList tasks={nested.get(id)!} {...actions} embeddedParent={id} />}
           </div>
         </>
       )}

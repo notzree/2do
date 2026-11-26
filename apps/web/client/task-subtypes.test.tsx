@@ -152,7 +152,7 @@ it("offers the relevant action for disabled, failed and pending classification",
   expect(pending).not.toContain("Classify task");
 });
 
-it("identifies manual types and suppresses redundant reclassification", () => {
+it("allows classification when all enabled types have manual decisions", () => {
   const confirmed = renderTypes(true, {
     subtypes: [
       {
@@ -165,7 +165,7 @@ it("identifies manual types and suppresses redundant reclassification", () => {
     ],
   });
   expect(confirmed).toContain("User-confirmed");
-  expect(confirmed).not.toContain("Classify task");
+  expect(confirmed).toContain("Classify task");
   expect(confirmed).not.toContain("Inferred by Clef");
 });
 

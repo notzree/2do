@@ -35,7 +35,7 @@ const study: TaskPlugin = {
 			prompts: [
 				{ id: "topics", field: "target.topics", trigger: "task.open", label: "Choose topics" },
 			],
-			classification: { threshold: 0.9, instructions: "Is this a study session?" },
+			classification: { instructions: "Is this a study session?" },
 			view: (_, data) => data,
 		},
 	],
@@ -54,7 +54,7 @@ const health: TaskPlugin = {
 			editor: [
 				{ fields: [{ key: "actualMinutes", label: "Actual minutes", kind: "number", min: 1 }] },
 			],
-			classification: { threshold: 0.9, instructions: "Is this a workout?" },
+			classification: { instructions: "Is this a workout?" },
 			view: (_, data) => data,
 		},
 	],

@@ -29,7 +29,7 @@ export function refreshPlannerChange(client: QueryClient, change: PlannerChange,
         case "details": return typeof key === "string" && ids.has(key);
         case "summaries": return Array.isArray(key) && key.some((id) => ids.has(id));
         case "capture": return key === change.id && (change.kind === "create" || change.kind === "delete");
-        case "reports": return measured && (key === "series" || key === "history");
+        case "reports": return key === "planner-goals" || measured && (key === "series" || key === "history");
         case "review":
           if (change.kind === "reviewSchedule" || change.kind === "delete") return true;
           if (change.kind !== "update") return false;

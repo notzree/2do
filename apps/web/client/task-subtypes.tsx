@@ -25,7 +25,7 @@ function useTaskDetails(task: Task, active: boolean) {
     queryKey,
     enabled: active,
     queryFn: ({ signal }) => readTaskDetails(task.id, signal),
-    refetchInterval: (q) => (q.state.data?.classification === "pending" || q.state.data?.workflows?.some(w=>w.pending) ? 1500 : false),
+    refetchInterval: (q) => (q.state.data?.extracting || q.state.data?.classification === "pending" || q.state.data?.workflows?.some(w=>w.pending) ? 1500 : false),
   });
   return {
     details: query.data,
@@ -81,6 +81,12 @@ function SubtypeEditor({
                   />
                   <small>One item per line</small>
                 </>
+              ) : field.kind === "choice" ? (
+                <select disabled={busy} value={value} onChange={e=>onChange(name,e.target.value)}>
+                  <option value="">Unspecified</option>{field.options.map(v=><option key={v}>{v}</option>)}
+                </select>
+              ) : field.kind === "text" ? (
+                <input disabled={busy} maxLength={field.maxLength} value={value} onChange={e=>onChange(name,e.target.value)} />
               ) : (
                 <input
                   disabled={busy}
@@ -399,11 +405,7 @@ export function TaskSubtypes({
         queryClient.invalidateQueries({ queryKey: ["planner", "summaries"] }),
       ]),
   });
-  const canClassify =
-    details &&
-    definitions?.some(
-      (t) => !details.subtypes.some((s) => s.typeId === t.id && (s.source === "manual" || s.schemaVersion !== t.schemaVersion)),
-    );
+  const canClassify = details && (definitions?.length ?? 0) > 0;
   const receipt = details?.lastClassification;
   const matchedLabels = receipt?.matched.map(
     (id) => definitions?.find((d) => d.id === id)?.label ?? id,
@@ -518,6 +520,7 @@ export function TaskSubtypes({
           Clef is checking enabled types…
         </p>
       )}
+      {details?.extracting && <p className="type-note" role="status">Reading fields from the title…</p>}
       {details?.classification === "failed" && (
         <p className="type-note" role="status">
           Clef couldn’t finish classifying this task.
@@ -526,6 +529,7 @@ export function TaskSubtypes({
       {details && definitions?.length === 0 && (
         <p className="type-note">No plugins enabled for this planner.</p>
       )}
+      {details && !task.due && definitions?.some(d=>d.captureTiming==="deadline" && details.subtypes.some(s=>s.typeId===d.id && s.data)) && <p className="type-note">When is this deliverable due? Set its due date under Edit task.</p>}
       {details && definitions?.map(card)}
       {receipt && (
         <div className="type-activity">

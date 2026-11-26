@@ -10,7 +10,7 @@ import {
 	MessageSquare,
 	Network,
 	NotebookPen,
-	SquareCheck,
+	SquareCheck, Target,
 } from "lucide-react";
 import type { SlashCommand } from "./commands.ts";
 import { TaskTypeIcon } from "./task-type-icon.tsx";
@@ -25,7 +25,7 @@ import {
 } from "./slash-editor.ts";
 
 const commandIcons = {
-	task: SquareCheck,
+	carryover: CalendarDays, task: SquareCheck, goal:Target,
 	note: NotebookPen,
 	text: NotebookPen,
 	heading: Heading,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { classificationThreshold } from "./task-classifier.ts";
 import { fieldName } from "./subtype-field-values.ts";
 import {
 	pluginInstallation,
@@ -18,6 +19,12 @@ export function numberField<const Key extends string>(options: Options<"number">
 	};
 }
 
+export function textField<const Key extends string>(options: Options<"text"> & { key: Key }) {
+	return {schema:z.string().trim().min(1).max(options.maxLength),field:{...options,kind:"text" as const}};
+}
+export function choiceField<const Key extends string>(options: Options<"choice"> & { key: Key }) {
+	return {schema:z.enum(options.options),field:{...options,kind:"choice" as const}};
+}
 export function textListField<const Key extends string>(
 	options: Options<"text-list"> & { key: Key },
 ) {
@@ -35,6 +42,8 @@ export function describeSubtype<Data extends PluginData, View>(
 ) {
 	return publicSubtype.parse({
 		...definition,
+		captureAliases: definition.captureAliases && Object.keys(definition.captureAliases),
+		classification: { ...definition.classification, threshold: classificationThreshold },
 		actions: definition.workflow?.commands,
 	});
 }
@@ -77,6 +86,7 @@ function supportsField(root: JsonSchema, path: string, field: Field) {
 	const nodes = editorSchemas(root, path);
 	const types = acceptedTypes(nodes).filter((type) => type !== "null");
 	if (!types.length) return false;
+	if (field.kind === "text" || field.kind === "choice") return types.every(type=>type === "string");
 	if (field.kind === "number")
 		return types.every((type) => type === "number" || type === "integer");
 	if (!types.every((type) => type === "array")) return false;
@@ -93,6 +103,7 @@ export function validateSubtypeDefinition<Data extends PluginData, View>(
 ) {
 	const manifest = describeSubtype(definition);
 	definition.schema.parse(definition.initialData);
+	for (const preset of Object.values(definition.captureAliases ?? {})) definition.schema.parse({...definition.initialData,...preset});
 	const paths = new Set<string>();
 	if (manifest.editor?.some((group) => group.fields.length)) {
 		// Optional/default/nullable wrappers, objects and unions retain their public JSON shape.
@@ -114,6 +125,9 @@ export function validateSubtypeDefinition<Data extends PluginData, View>(
 				paths.add(path);
 			}
 		}
+	}
+	for (const [path, instructions] of Object.entries(definition.extraction ?? {})) {
+		if (!paths.has(path) || !instructions.trim()) throw new Error("Invalid extraction field " + path);
 	}
 	const promptIds = new Set<string>();
 	for (const prompt of manifest.prompts ?? []) {

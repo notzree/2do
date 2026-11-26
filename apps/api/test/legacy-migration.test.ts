@@ -89,6 +89,7 @@ it("opens the deployed raw SQLite layout, preserves its planner and notebook, an
 	expect(new Uint8Array(await (await call("images/" + imageId)).arrayBuffer())).toEqual(bytes);
 	expect(await (await call("task-plugins")).json()).toMatchObject([
 		{ id: "nutrition", enabled: false },
+		{ id: "fitness", enabled: false }, { id: "budgeting", enabled: false }, { id: "productivity", enabled: false },
 	]);
 	await runInDurableObject(stub, (_, ctx) => {
 		const sql = ctx.storage.sql;
@@ -138,4 +139,25 @@ it("rolls the whole bridge back when a legacy task cannot be imported", async ()
 				.toArray(),
 		).toEqual([]);
 	});
+});
+
+it("upgrades saved metric targets to core goals once while retaining their reporting history",async()=>{
+	const stub=env.USER_PLANNER.getByName(crypto.randomUUID());
+	const id=crypto.randomUUID(), revision=crypto.randomUUID();
+	const old={id,revision,label:"Daily protein",timeZone:"America/Toronto",metric:{id:"nutrition.protein",label:"Protein",version:1,unit:"g",reducer:"sum"},
+		versions:[{effectiveFrom:"2026-11-01",target:{comparator:"atLeast",value:50}},{effectiveFrom:"2026-11-12",target:{comparator:"atLeast",value:60}}]};
+	await runInDurableObject(stub,async(_,ctx)=>{
+		const sql=ctx.storage.sql;
+		// Recreate the pre-goal storage boundary on this new, isolated test planner.
+		sql.exec("DROP TABLE goal_task_link; DROP TABLE goal_check_in; DROP TABLE planner_goal");
+		const step=migrations.journal.entries.find(e=>e.tag.endsWith("planner_goals"))!;
+		sql.exec("DELETE FROM __drizzle_migrations WHERE created_at >= ?",step.when);
+		sql.exec("INSERT INTO plugin_goal(id,creation,document) VALUES(?,?,?)",id,"original request",JSON.stringify(old));
+		await migratePlanner(drizzle(ctx.storage));
+		await migratePlanner(drizzle(ctx.storage));
+		expect(sql.exec("SELECT COUNT(*) AS count FROM planner_goal").one().count).toBe(1);
+	});
+	await (await stub.fetch("https://test/api/task-plugins/nutrition",{method:"PUT",headers:{"content-type":"application/json"},body:'{"enabled":true}'})).json();
+	expect(await (await stub.fetch("https://test/api/planner-goals")).json()).toMatchObject([{id,title:old.label,dailyMetric:"nutrition.protein"}]);
+	expect(await (await stub.fetch("https://test/api/goals/"+id+"/history?from=2026-11-01&to=2026-11-13")).json()).toMatchObject({goal:old});
 });

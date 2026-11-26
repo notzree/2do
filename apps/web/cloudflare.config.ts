@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => ({
 		domains: env.PLANNER_HOSTNAME ? [env.PLANNER_HOSTNAME] : [],
 		assets: {
 			notFoundHandling: "single-page-application",
-			runWorkerFirst: ["/api", "/api/*"],
+			runWorkerFirst: ["/api", "/api/*", "/hooks/gmail", "/hooks/google-calendar"],
 		},
 		env: {
 			API: bindings.worker({ worker: "2do-api" }),

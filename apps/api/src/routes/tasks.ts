@@ -1,3 +1,7 @@
+import { extractTaskTime } from "../extractors/task-time.ts";
+import { extractSubtasks } from "../extractors/subtasks.ts";
+import type { TitleExtractor } from "../extractors/clairic.ts";
+
 import { taskObservationsHeader } from "../interfaces/plugin-reports.ts";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import {
@@ -109,6 +113,8 @@ export const taskOperations = {
 			...jsonErrors,
 		},
 	}),
+	planRevision: createRoute({method:"get", path:"/api/plan/revision", operationId:"planRevision",
+		responses:{200:jsonResponse(z.object({revision:z.int().nonnegative()})),...accessErrors}}),
 	listTasks: createRoute({
 		operationId: "listTasks",
 		method: "get",
@@ -305,6 +311,8 @@ export function plannerRoutes(
 	plugins: TaskPlugins,
 	commit: CommitTaskWrite,
 	classification: TaskClassification | undefined,
+	calendarStatus: (id: string) => string,
+	extract?: TitleExtractor,
 ) {
 	const app = new OpenAPIHono<PlannerCaller>();
 	const op = taskOperations;
@@ -322,15 +330,47 @@ export function plannerRoutes(
 		return c.json({ classification: "pending" } as const, 202);
 	});
 	app.openapi(op.searchTasks, (c) => c.json(planner.search(c.req.valid("json")), 200));
+	app.openapi(op.planRevision, c => c.json({revision: planner.revision()},200));
 	app.openapi(op.listTasks, (c) => c.json(planner.plan(), 200));
-	app.openapi(op.createTask, async (c) =>
-		c.json(await commit(() => planner.create(c.req.valid("json"))), 201),
-	);
+	app.openapi(op.createTask, async (c) => {
+		const input = c.req.valid("json");
+		const [outline, timing] = await Promise.all([
+			input.kind === "task" ? extractSubtasks(extract, input.title) : undefined,
+			input.schedule === undefined || input.due === undefined || input.durationMinutes === undefined
+				? extractTaskTime(extract, input.title, {
+					...input.titleContext,
+					timeZone: input.titleContext?.timeZone ?? planner.titleZone(),
+					durationMinutes: input.durationMinutes,
+				})
+				: undefined,
+		]);
+		return c.json(await commit(() => planner.createOutline(input, outline, undefined, timing)), 201);
+	});
 	app.openapi(op.getTask, (c) => c.json(planner.get(c.req.valid("param").id), 200));
 	app.openapi(op.updateTask, async (c) => {
 		const { id } = c.req.valid("param");
 		const patch = c.req.valid("json");
+		const previous = planner.get(id);
+		const calendar = calendarStatus(id);
+		const timing = previous.revision === patch.revision && patch.title && patch.title !== previous.title &&
+			calendar !== "imported" && !(c.env?.fromAgent && (calendar === "linked" || calendar === "conflict")) &&
+			((patch.due === undefined && !previous.due) ||
+				(patch.schedule === undefined && (!previous.schedule || previous.schedule.type === "day")) ||
+				(patch.durationMinutes === undefined && previous.durationMinutes === null))
+			? await extractTaskTime(extract, patch.title, {
+				timeZone: planner.titleZone(id),
+				defaultDate: previous.currentDay ?? (previous.schedule?.type === "day" ? previous.schedule.date : undefined),
+				durationMinutes: patch.durationMinutes === undefined ? previous.durationMinutes : patch.durationMinutes,
+				deadline: plugins.details(id).subtypes.some((subtype) =>
+					subtype.data && plugins.captureTiming(subtype.typeId) === "deadline"),
+			})
+			: undefined;
 		const { updated, measured } = await commit(() => {
+			if (c.env?.fromAgent && (patch.title !== undefined || patch.schedule !== undefined || patch.kind !== undefined)) {
+				const status = calendarStatus(id);
+				if (status === "linked" || status === "conflict")
+					throw new HTTPException(403, { message: "Changes to a published calendar event require the user." });
+			}
 			if (c.env?.fromAgent && patch.schedule !== undefined) {
 				const current = planner.get(id).schedule;
 				if (current?.type === "fixed" && !sameTime(patch.schedule, current))
@@ -340,7 +380,7 @@ export function plannerRoutes(
 			}
 			const reports = plugins.workflows.reports;
 			const previouslyMeasured = reports.hasObservations(id);
-			const updated = planner.update(id, patch);
+			const updated = planner.update(id, patch, timing);
 			return { updated, measured: previouslyMeasured || reports.hasObservations(id) };
 		});
 		c.header(taskObservationsHeader, measured ? "1" : "0");

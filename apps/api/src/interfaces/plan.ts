@@ -11,9 +11,11 @@ export const fixedSchedule = z.strictObject({ type: z.literal("fixed"), ...inter
 	.refine((s) => Date.parse(s.end) > Date.parse(s.start), {
 		message: "The end of an interval must follow its start.",
 	});
+export const daySchedule = z.strictObject({ type: z.literal("day"), date: z.iso.date(), endDateExclusive: z.iso.date().optional() })
+	.refine(s => !s.endDateExclusive || s.endDateExclusive > s.date, { message: "All-day end must follow its start." });
 export const schedule = z
 	.discriminatedUnion("type", [
-		z.strictObject({ type: z.literal("day"), date: z.iso.date() }),
+		daySchedule,
 		fixedSchedule,
 		z.strictObject({ type: z.literal("window"), ...interval }),
 	])
@@ -21,7 +23,12 @@ export const schedule = z
 		message: "The end of an interval must follow its start.",
 	})
 	.describe("An all-day date or a half-open interval with end later than start.");
+export const dueDate = z.discriminatedUnion("type", [
+	z.strictObject({type:z.literal("day"),date:z.iso.date()}),
+	z.strictObject({type:z.literal("time"),at:z.iso.datetime({offset:true}),timeZone:z.string().min(1).refine(zone=>{try{new Intl.DateTimeFormat("en",{timeZone:zone});return true}catch{return false}})}),
+]);
 const fields = {
+	due: dueDate.nullable().optional(),
 	parentId: taskId.nullable(),
 	title: z.string().trim().min(1).max(240),
 	kind,
@@ -32,19 +39,41 @@ const fields = {
 const revision = z.int().nonnegative();
 export const task = z.strictObject({
 	id: taskId,
+	createdDate: z.iso.date().optional().describe("Local creation date, when known."),
+	currentDay: z.iso.date().nullable().optional().describe("Current planner day; null for an unassigned task."),
+	carriedFrom: z.array(z.iso.date()).optional().describe("Previous planner days, one per carryover."),
+	siblingOrder: z.int().nonnegative().optional(),
 	revision,
 	...fields,
 });
 export const placement = z.strictObject({ side: z.enum(["before", "after"]), anchor: taskId });
+export const timeZone = z
+	.string()
+	.min(1)
+	.max(100)
+	.refine((zone) => {
+		try {
+			new Intl.DateTimeFormat("en", { timeZone: zone });
+			return true;
+		} catch {
+			return false;
+		}
+	}, "Unknown time zone");
+export const titleContext = z.strictObject({
+	timeZone: timeZone.optional(),
+	defaultDate: z.iso.date().optional(),
+	referenceDate: z.iso.date().optional(),
+});
 export const createTask = z.strictObject({
 	...fields,
 	parentId: fields.parentId.default(null),
 	id: taskId.optional().describe("Client-assigned ID. Reusing an existing ID returns 409."),
 	kind: kind.default("task"),
 	completed: fields.completed.default(false),
-	schedule: fields.schedule.default(null),
-	durationMinutes: fields.durationMinutes.default(null),
+	schedule: fields.schedule.optional(),
+	durationMinutes: fields.durationMinutes.optional(),
 	placement: placement.optional(),
+	titleContext: titleContext.optional().describe("Calendar context for dates and times in the title."),
 });
 export const patchTask = z
 	.strictObject(fields)

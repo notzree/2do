@@ -13,7 +13,7 @@ import { maxRawInputLength, type NewTask } from "@2do/api/notebook";
 import { dayKey } from "./calendar.ts";
 
 type Range = { from: number; to: number };
-type Draft = Range & { name: string; typeId?: string };
+type Draft = Range & { name: string; typeId?: string; alias?:string };
 type SlashState = { draft?: Draft; dismissed?: number; index: number };
 export const slashKey = new PluginKey<SlashState>("inlineSlash");
 type Input = (Range & { kind: "prefix"; query: string }) | (Draft & { kind: "body"; body: string });
@@ -23,6 +23,7 @@ export type SlashActions = {
 	tasks: readonly Task[];
 	navigate: (period: Period) => void;
 	image: () => void;
+	carryover: () => void;
 	chat: (name: "agent" | "side", body: string) => boolean;
 };
 
@@ -76,6 +77,7 @@ export function slashInput(
 			kind: "body",
 			name: saved.name,
 			typeId: saved.kind === "typed" ? saved.typeId : undefined,
+			alias: saved.kind === "typed" ? saved.alias : undefined,
 			from: $from.start(),
 			to: $from.end(),
 			body: line.slice(saved.name.length + 2),
@@ -147,6 +149,7 @@ export function slashOptions(
 
 export function slashHint(input: Input): string | undefined {
 	if (input.kind !== "body") return;
+	if (input.name === "goal") return !input.body.trim() ? "Type a goal" : input.body.trim().length > 240 ? "Use up to 240 characters." : undefined;
 	if (input.name === "task" || input.typeId) {
 		if (input.body.length > maxRawInputLength)
 			return `Task captures can have up to ${maxRawInputLength} characters.`;
@@ -162,7 +165,7 @@ export function slashHint(input: Input): string | undefined {
 export function insertReference(
 	state: EditorState,
 	range: Range,
-	type: "taskRef" | "graphRef",
+	type: "taskRef" | "graphRef" | "goalRef",
 	id: string,
 ): Transaction {
 	const start = state.doc.resolve(range.from);
@@ -204,6 +207,7 @@ export function chooseSlash(view: EditorView, actions: SlashActions, index: numb
 					draft: {
 						name: command.name,
 						typeId: command.kind === "typed" ? command.typeId : undefined,
+						alias: command.kind === "typed" ? command.alias : undefined,
 						from: input.from,
 						to: input.from + token.length,
 					},
@@ -220,11 +224,16 @@ export function chooseSlash(view: EditorView, actions: SlashActions, index: numb
 				);
 			view.dispatch(tr);
 			if (command.kind === "date") actions.navigate(command.period);
+			else if (command.name === "carryover") actions.carryover();
 			else if (command.name === "image") actions.image();
 		}
 		return true;
 	}
-	if (input.name === "task" || input.typeId) {
+	if (input.name === "goal") {
+		if (slashHint(input)) return true;
+		const goal={id:crypto.randomUUID(),title:input.body.trim()};
+		view.dispatch(insertReference(state,input,"goalRef",goal.id).setMeta("newGoal",goal));
+	} else if (input.name === "task" || input.typeId) {
 		if (slashHint(input)) return true;
 		const text = input.body.trim();
 		const task: NewTask = {
@@ -238,6 +247,7 @@ export function chooseSlash(view: EditorView, actions: SlashActions, index: numb
 							.trimEnd() + "…",
 			rawInput: input.body,
 			...(input.typeId && { typeId: input.typeId }),
+			...(input.alias && {alias:input.alias}),
 			captureDate: dayKey(new Date()),
 			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 		};

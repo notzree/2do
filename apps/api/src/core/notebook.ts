@@ -1,3 +1,6 @@
+import { extractTaskTime, type TaskTiming } from "../extractors/task-time.ts";
+import { extractSubtasks, type TaskOutline } from "../extractors/subtasks.ts";
+import type { TitleExtractor } from "../extractors/clairic.ts";
 import { eq } from "drizzle-orm";
 import type { PlannerStore } from "../db/planner.ts";
 import { days, taskCaptures } from "../db/schema.ts";
@@ -11,6 +14,8 @@ import {
 } from "../interfaces/notebook.ts";
 import { createTask } from "../interfaces/plan.ts";
 import { Planner, PlannerError } from "./planner.ts";
+import type { PlannerGoals } from "./goals.ts";
+import { plannerGoals } from "../db/schema.ts";
 import type { TaskPlugins } from "./task-plugins.ts";
 
 function references(doc: NotebookDoc) {
@@ -26,6 +31,8 @@ export class Notebook {
 		private readonly planner: Planner,
 		private readonly commit: CommitTaskWrite,
 		private readonly plugins: TaskPlugins,
+		private readonly goals: PlannerGoals,
+		private readonly extract?: TitleExtractor,
 	) {}
 	private row(day: string) {
 		return this.db.select().from(days).where(eq(days.day, day)).get();
@@ -49,6 +56,25 @@ export class Notebook {
 		const commandHash = Array.from(new Uint8Array(digest), (byte) =>
 			byte.toString(16).padStart(2, "0"),
 		).join("");
+		const captures = new Map<string, { outline?: TaskOutline; timing: TaskTiming }>();
+		// Replays and stale writes need no inference. Recheck the revision in the transaction after inference.
+		if (this.extract && (this.row(day)?.revision ?? 0) === draft.revision) {
+			for (let i = 0; i < draft.newTasks.length; i += 8) {
+				await Promise.all(draft.newTasks.slice(i, i + 8).map(async (task) => {
+					const text = task.rawInput ?? task.title;
+					const [outline, timing] = await Promise.all([
+						task.typeId ? undefined : extractSubtasks(this.extract, text),
+						extractTaskTime(this.extract, text, {
+							timeZone: task.timeZone ?? this.planner.titleZone(),
+							defaultDate: day,
+							referenceDate: task.captureDate ?? day,
+							deadline: this.plugins.captureTiming(task.typeId) === "deadline",
+						}),
+					]);
+					captures.set(task.id, { outline, timing });
+				}));
+			}
+		}
 		return this.commit(() =>
 			this.db.transaction(() => {
 				const current = this.row(day);
@@ -63,13 +89,23 @@ export class Notebook {
 				}
 				const previousRefs = references(current?.document ?? emptyPage().doc);
 				const refs = references(draft.doc);
-				for (const { id, title, rawInput, typeId, captureDate, timeZone } of draft.newTasks) {
+				const goalRefs = new Set(draft.doc.content.flatMap(n=>n.type === "goalRef" ? [n.attrs.id] : []));
+				for (const goal of draft.newGoals ?? []) {
+					if (!goalRefs.has(goal.id)) throw new PlannerError(409,"New goal needs a document reference");
+					this.goals.create(goal);
+				}
+				for (const id of goalRefs) if (!this.db.select({id:plannerGoals.id}).from(plannerGoals).where(eq(plannerGoals.id,id)).get())
+					throw new PlannerError(404,"Goal not found");
+				for (const { id, title, rawInput, typeId, alias, captureDate, timeZone } of draft.newTasks) {
 					if (!refs.has(id)) throw new PlannerError(409, "New task needs a document reference");
-					this.planner.create(
-						createTask.parse({ id, title, schedule: { type: "day", date: day } }),
+					this.planner.createOutline(
+						createTask.parse({ id, title, titleContext: { defaultDate: day, referenceDate: captureDate ?? day, timeZone } }),
+						captures.get(id)?.outline,
 						rawInput,
+						captures.get(id)?.timing,
+						captureDate,
 					);
-					if (typeId) this.plugins.attachAtCapture(id, typeId);
+					if (typeId) this.plugins.attachAtCapture(id, typeId, rawInput, alias);
 					if (rawInput !== undefined) {
 						this.db
 							.insert(taskCaptures)

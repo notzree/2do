@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, uniqueIndex, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { Task } from "../interfaces/plan.ts";
 import type { TimeProposal } from "../interfaces/review.ts";
 import type { NotebookDoc, TaskCapture } from "../interfaces/notebook.ts";
@@ -154,3 +154,41 @@ export const workflowJobs = sqliteTable(
 	},
 	(t) => [primaryKey({ columns: [t.taskId, t.typeId] }), index("plugin_effect_due").on(t.due)],
 );
+
+export const extractionJobs = sqliteTable(
+	"subtype_extraction",
+	{
+		taskId: taskReference(),
+		typeId: text().notNull(),
+		epoch: text().notNull(),
+		revision: text().notNull(),
+		title: text().notNull(),
+		input: text({ mode: "json" }).$type<{ text: string; workflowRevision?: string }>().notNull(),
+		due: integer().notNull(),
+		attempts: integer().notNull().default(0),
+	},
+	(t) => [primaryKey({ columns: [t.taskId, t.typeId] }), index("subtype_extraction_due").on(t.due)],
+);
+
+export const calendarLinks = sqliteTable("calendar_link", {
+	taskId: text().primaryKey(),
+	account: text().notNull(),
+	remoteId: text().notNull(),
+	origin: text({ enum: ["google", "planner"] }).notNull(),
+	base: text({ mode: "json" }).$type<import("../interfaces/connectors.ts").EventFields>(),
+	conflict: integer({ mode: "boolean" }).notNull().default(false),
+	seen: text(),
+}, t => [uniqueIndex("calendar_remote").on(t.account, t.origin, t.remoteId)]);
+
+export const plannerGoals = sqliteTable("planner_goal", {
+	id: text().primaryKey(), revision: text().notNull(), creation: text().notNull(),
+	document: text({ mode: "json" }).$type<import("../interfaces/goals.ts").GoalRecord>().notNull(),
+});
+export const goalLinks = sqliteTable("goal_task_link", {
+	goalId: text().notNull().references(() => plannerGoals.id, { onDelete: "cascade" }),
+	taskId: taskReference(), role: text().$type<"contributes" | "satisfies">().notNull(),
+}, (t) => [primaryKey({ columns: [t.goalId, t.taskId] }), index("goals_by_task").on(t.taskId)]);
+export const goalCheckIns = sqliteTable("goal_check_in", {
+	id: integer().primaryKey(), goalId: text().notNull().references(() => plannerGoals.id, { onDelete: "cascade" }),
+	at: text().notNull(), note: text().notNull(),
+}, (t) => [index("check_ins_by_goal").on(t.goalId, t.id)]);

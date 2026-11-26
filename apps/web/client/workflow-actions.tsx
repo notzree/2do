@@ -164,7 +164,11 @@ function ActionForm({
         ) : (
           <label key={field.key}>
             {field.label}
-            {field.kind === "text" ? (
+            {field.kind === "choice" ? (
+              <select required={field.required} disabled={mutation.isPending || stale} value={draft.values[field.key] ?? ""}
+                onChange={e=>edit(field.key,e.target.value)}><option value="">Choose…</option>
+                {field.options.map(v=><option key={v}>{v}</option>)}</select>
+            ) : field.kind === "text" ? (
               <textarea
                 rows={3}
                 maxLength={field.maxLength}

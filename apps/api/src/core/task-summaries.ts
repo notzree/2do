@@ -18,7 +18,7 @@ function fieldInlays(subtype: TaskSubtype, definition: TaskPluginInstallation["s
       const value = readEditorValue(subtype.data, group, field);
       if (value === undefined || (Array.isArray(value) && !value.length)) continue;
       const text =
-        typeof value === "number"
+        !Array.isArray(value)
           ? String(value)
           : value.slice(0, 2).join(", ") + (value.length > 2 ? ` +${value.length - 2}` : "");
       inlays.push({
@@ -40,9 +40,11 @@ export class TaskSummaries {
     const definitions = new Map(
       installations.flatMap((p) => p.subtypes.map((t) => [t.id, t] as const)),
     );
+    const extracting = this.plugins.db.extracting(ids);
     const rows = this.plugins.db.summaryRows(ids, new Set(definitions.keys()));
     return rows.map(({ task, classification, subtypes: active, skipped }) => ({
       id: task.id,
+      ...(extracting.has(task.id) && { extracting: true }),
       classification,
       types: active.map(({ typeId, source }) => ({
         typeId,

@@ -9,7 +9,7 @@ type Subtype = TaskPluginInstallation["subtypes"][number];
 const confidence = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 3 });
 const scopeLabel = { task: "this task", "local-day": "the same local day" };
 
-function SubtypeCapabilities({ subtype, command }: { subtype: Subtype; command?: string }) {
+function SubtypeCapabilities({ subtype, commands }: { subtype: Subtype; commands: string[] }) {
   const fields = subtype.editor?.flatMap((group) =>
     group.fields.map((field) => field.inlayLabel ?? field.label),
   );
@@ -20,11 +20,11 @@ function SubtypeCapabilities({ subtype, command }: { subtype: Subtype; command?:
         {subtype.label}
       </h3>
       <dl className="plugin-capabilities">
-        {command && (
+        {commands.length > 0 && (
           <div>
             <dt>Capture command</dt>
             <dd>
-              <code>/{command}</code>
+              {commands.map(command => <code key={command}>/{command} </code>)}
             </dd>
           </div>
         )}
@@ -74,8 +74,7 @@ function SubtypeCapabilities({ subtype, command }: { subtype: Subtype; command?:
             <dd>
               <details className="plugin-classifier">
                 <summary>
-                  Match at {confidence.format(subtype.classification.threshold)} confidence or
-                  higher
+                  Highest score above {confidence.format(subtype.classification.threshold)} wins
                 </summary>
                 <p>{subtype.classification.instructions}</p>
               </details>
@@ -108,9 +107,6 @@ function PluginSetting({
       ? catalog
       : catalog.map((p) => (p.id === plugin.id ? { ...p, enabled: true } : p)),
   );
-  const shortcuts = new Map(
-    commands.flatMap((c) => (c.kind === "typed" ? [[c.typeId, c.name] as const] : [])),
-  );
   const { metrics, facts, features } = plugin;
 
   return (
@@ -141,9 +137,13 @@ function PluginSetting({
         <SubtypeCapabilities
           key={subtype.id}
           subtype={subtype}
-          command={shortcuts.get(subtype.id)}
+          commands={commands.flatMap(c=>c.kind==="typed" && c.typeId===subtype.id ? [c.name] : [])}
         />
       ))}
+      {!!plugin.goalSubtypes?.length && <section className="plugin-metrics"><h3>Goal types</h3>
+        <ul>{plugin.goalSubtypes.map(type=><li key={type.id}>{type.label}</li>)}</ul>
+        {plugin.enabled && openGoals && <button onClick={openGoals}>Manage goals</button>}
+      </section>}
       {!!metrics?.length && (
         <section className="plugin-metrics">
           <h3>Metrics</h3>

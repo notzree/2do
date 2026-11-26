@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import type { Plan, Task } from "@2do/api/plan";
-import { dayKey, formatDate, onDay, timeRange } from "./calendar.ts";
+import { dayKey, formatDate, onDay, timeRange, dueLabel, scheduledOnDay } from "./calendar.ts";
 import type { Mutate } from "./use-plan.ts";
 import { TaskTitle } from "./task-title.tsx";
 import { TaskHints } from "./task-hints.tsx";
@@ -15,11 +15,12 @@ export type ListActions = {
 // Each date/section is a projection. A child whose parent is elsewhere stays visible.
 export function TaskList({
   tasks,
+  day,
   plan,
   busy,
   mutate,
-  open,
-}: ListActions & { tasks: Task[] }) {
+  open, embeddedParent,
+}: ListActions & { tasks: Task[]; day?: Date; embeddedParent?: string }) {
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const ids = new Set(tasks.map((t) => t.id));
   const children = new Map<string | null, Task[]>();
@@ -29,6 +30,8 @@ export function TaskList({
     siblings.push(task);
     children.set(parent, siblings);
   }
+  for (const siblings of children.values())
+    siblings.sort((a, b) => (a.siblingOrder ?? Infinity) - (b.siblingOrder ?? Infinity));
   function fold(id: string) {
     setFolded((prev) => {
       const next = new Set(prev);
@@ -47,11 +50,11 @@ export function TaskList({
             .map((e) => plan.tasks.find((t) => t.id === e.from)!)
             .filter((t) => !t.completed);
           const context =
-            task.parentId && !ids.has(task.parentId)
+            task.parentId && task.parentId !== embeddedParent && !ids.has(task.parentId)
               ? plan.tasks.find((t) => t.id === task.parentId)?.title
               : "";
           const meta = [
-            timeRange(task),
+            (!day || scheduledOnDay(task,day)) && timeRange(task), dueLabel(task),
             task.durationMinutes && task.durationMinutes + " min",
             context && "In " + context,
             allChildren.length > 0 &&
@@ -128,13 +131,13 @@ export function Agenda({
   const quickAdd = useRef<HTMLInputElement>(null);
   const tasks = actions.plan.tasks.filter((t) => onDay(t, day));
   const fixed = tasks
-    .filter((t) => !t.completed && t.schedule?.type === "fixed")
+    .filter((t) => !t.completed && t.schedule?.type === "fixed" && scheduledOnDay(t,day))
     .sort(
       (a, b) =>
         Date.parse((a.schedule as { start: string }).start) -
         Date.parse((b.schedule as { start: string }).start),
     );
-  const anytime = tasks.filter((t) => !t.completed && t.schedule?.type !== "fixed");
+  const anytime = tasks.filter((t) => !t.completed && (t.schedule?.type !== "fixed" || !scheduledOnDay(t,day)));
   const done = tasks.filter((t) => t.completed);
   async function add(event: FormEvent) {
     event.preventDefault();
@@ -142,7 +145,7 @@ export function Agenda({
       title.trim() &&
       (await actions.mutate.createTask({
         title,
-        schedule: { type: "day", date: dayKey(day) },
+        titleContext: { defaultDate: dayKey(day), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
       }))
     )
       setTitle((current) => (current === title ? "" : current));
@@ -184,13 +187,13 @@ export function Agenda({
       {fixed.length > 0 && (
         <>
           <h3>Scheduled</h3>
-          <TaskList tasks={fixed} {...actions} />
+          <TaskList day={day} tasks={fixed} {...actions} />
         </>
       )}
       {anytime.length > 0 && (
         <>
           <h3>Anytime</h3>
-          <TaskList tasks={anytime} {...actions} />
+          <TaskList day={day} tasks={anytime} {...actions} />
         </>
       )}
       {!tasks.length && (
@@ -199,7 +202,7 @@ export function Agenda({
       {done.length > 0 && (
         <details>
           <summary>Completed · {done.length}</summary>
-          <TaskList tasks={done} {...actions} />
+          <TaskList day={day} tasks={done} {...actions} />
         </details>
       )}
     </section>

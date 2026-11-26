@@ -46,7 +46,11 @@ export function writeFields(editor: TaskSubtypeEditor, data: Data, values: Field
         }
         if (items.length) target[field.key] = items;
         else delete target[field.key];
-      } else if (text) {
+      } else if (text && (field.kind === "text" || field.kind === "choice")) {
+        if (field.kind === "text" ? text.length > field.maxLength : !field.options.includes(text))
+          throw new Error("Invalid " + field.label);
+        target[field.key] = text;
+      } else if (text && field.kind === "number") {
         const number = Number(text);
         if (!Number.isFinite(number) || number < field.min) {
           throw new Error(`${field.label} must be at least ${field.min}.`);

@@ -21,9 +21,10 @@ export function readFieldValue(data: Data, path: string): unknown {
 export function readEditorValue(
 	data: Data,
 	group: { key?: string },
-	field: { key: string; kind: "number" | "text-list" },
-): string[] | number | undefined {
+	field: { key: string; kind: "number" | "text-list" | "text" | "choice" },
+): string[] | number | string | undefined {
 	const value = readFieldValue(data, fieldName(group, field));
 	if (field.kind === "number") return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+	if (field.kind === "choice" || field.kind === "text") return typeof value === "string" ? value : undefined;
 	if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
 }

@@ -8,6 +8,7 @@ import {
 	type GoalTarget,
 	type MetricDefinition,
 } from "@2do/api/plugin-reports";
+import { PlannerGoalPanel } from "./planner-goals.tsx";
 import { Modal } from "./modal.tsx";
 import {
 	changeDailyGoal,
@@ -288,6 +289,9 @@ function GoalList({ goals, edit }: { goals: Goal[]; edit: (goal: Goal) => void }
 }
 
 export function GoalSettings({ openPlugins }: { openPlugins: () => void }) {
+	return <><PlannerGoalPanel/><DailyGoalSettings openPlugins={openPlugins}/></>;
+}
+function DailyGoalSettings({ openPlugins }: { openPlugins: () => void }) {
 	const settings = useReportSettings();
 	const metrics = useQuery(metricsQuery);
 	const goals = useQuery(goalsQuery);
@@ -319,7 +323,7 @@ export function GoalSettings({ openPlugins }: { openPlugins: () => void }) {
 					<h2>Daily goals</h2>
 					{available && (
 						<button type="button" onClick={() => setEditing("create")}>
-							New goal
+							New daily target
 						</button>
 					)}
 				</div>

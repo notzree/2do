@@ -9,16 +9,19 @@ import { nextPeriods, previousPeriods } from "./calendar.ts";
 const periods = { ...nextPeriods, ...previousPeriods };
 export type Period = keyof typeof periods;
 export type SlashCommand = { description: string } & (
-	| { kind: "draft"; name: "task" | "link task" | "graph" | "agent" | "side" }
+	| { kind: "draft"; name: "task" | "goal" | "link task" | "graph" | "agent" | "side" }
+	| { kind: "action"; name: "carryover" }
 	| { kind: "block"; name: "note" | "text" | "heading" | "image" }
 	| { kind: "date"; name: string; period: Period }
-	| { kind: "typed"; name: string; typeId: string; icon?: TaskTypeIconName }
+	| { kind: "typed"; name: string; typeId: string; alias?:string; icon?: TaskTypeIconName }
 );
 const captureCommands: SlashCommand[] = [
 	{ kind: "draft", name: "task", description: "Capture a task" },
 	{ kind: "block", name: "note", description: "Write a note" },
 ];
 const otherCommands: SlashCommand[] = [
+	{ kind: "action", name: "carryover", description: "Move yesterday’s unfinished tasks to this day" },
+	{kind:"draft",name:"goal",description:"Capture a goal"},
 	{ kind: "draft", name: "link task", description: "Reference a task" },
 	{ kind: "draft", name: "graph", description: "Insert a task graph" },
 	{ kind: "block", name: "heading", description: "Insert a heading" },
@@ -38,22 +41,13 @@ export const commands = [...captureCommands, ...otherCommands];
 export function notebookCommands(plugins: readonly TaskPluginInstallation[] = []): SlashCommand[] {
 	const types = plugins.filter((p) => p.enabled).flatMap((p) => p.subtypes);
 	const counts = new Map(commands.map((command) => [command.name.replaceAll(" ", "-"), 1]));
-	for (const { captureCommand } of types) {
-		if (captureCommand) counts.set(captureCommand, (counts.get(captureCommand) ?? 0) + 1);
-	}
-	const typed = types.flatMap(({ captureCommand, id, label, icon }) =>
-		captureCommand
-			? [
-					{
-						kind: "typed" as const,
-						name: counts.get(captureCommand) === 1 ? captureCommand : id,
-						typeId: id,
-						description: "Create " + label.toLowerCase() + " task",
-						icon,
-					},
-				]
-			: [],
-	);
+	const shortcuts = types.flatMap(type => type.captureCommand ? [type.captureCommand,...(type.captureAliases ?? [])].map(name=>({type,name})) : []);
+	for (const {name} of shortcuts) counts.set(name,(counts.get(name) ?? 0)+1);
+	const typed = shortcuts.map(({type,name})=>{
+		const alias=name!==type.captureCommand;
+		return {kind:"typed" as const, name:counts.get(name)===1?name:alias?type.id+"."+name:type.id,
+			typeId:type.id,...(alias && {alias:name}),icon:type.icon,description:"Create "+type.label.toLowerCase()+" task"};
+	});
 	return [...captureCommands, ...typed, ...otherCommands];
 }
 

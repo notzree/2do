@@ -18,6 +18,17 @@ export function usePlan() {
 		queryKey: planKey,
 		queryFn: async ({ signal }) => plan.parse((await api.GET("/api/tasks", { signal })).data),
 	});
+	useQuery({
+		queryKey: ["planner", "revision"],
+		enabled: !!query.data,
+		refetchInterval: 60_000,
+		queryFn: async ({ signal }) => {
+			const { data } = await api.GET("/api/plan/revision", { signal });
+			const cached = client.getQueryData<typeof query.data>(planKey);
+			if (data && cached && data.revision > cached.revision) await client.invalidateQueries({ queryKey: planKey });
+			return data?.revision ?? 0;
+		},
+	});
 	const mutation = useMutation({
 		scope: { id: "planner-writes" },
 		mutationFn: ({ execute }: Write) => execute(),

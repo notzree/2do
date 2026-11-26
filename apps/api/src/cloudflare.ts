@@ -3,3 +3,5 @@
 // is application-owned, so its class must be exported for the USER_PLANNER
 // binding declared in wrangler.jsonc to resolve.
 export { UserPlanner } from "./user-planner.ts";
+
+export { GoogleConnection, GmailDirectory } from "./connectors/connection.ts";

@@ -116,7 +116,7 @@ it("classifies notebook tasks in one batch and preserves a user answer across pl
 	expect(asTaskSubtype(await details(dinner.id), mealType)?.foods()).toEqual(["Bibimbap"]);
 });
 
-it("allows several subtypes and rejects results from superseded titles or installs", async () => {
+it("selects one eligible subtype above 0.5 and rejects results from superseded titles or installs", async () => {
 	const stub = env.USER_PLANNER.getByName(crypto.randomUUID());
 	await runInDurableObject(stub, async (_instance, state) => {
 		const db = new SqlitePlannerDatabase(drizzle(state.storage));
@@ -135,6 +135,11 @@ it("allows several subtypes and rejects results from superseded titles or instal
 			if (task.title !== previous?.title) classification.enqueue(task, 0, rawInput);
 		});
 		const providerInputs: string[] = [];
+		const scores: Record<string, number> = {
+			[mealType.id]: 0.6,
+			[expenseType.id]: 0.83,
+			[receiptType.id]: 0.79,
+		};
 		let inFlight = () => {};
 		const classification = new TaskClassification(db, plugins, {
 			async classify(inputs) {
@@ -142,7 +147,7 @@ it("allows several subtypes and rejects results from superseded titles or instal
 				inFlight();
 				return inputs.map(({ taskId, candidates }) => ({
 					taskId,
-					scores: Object.fromEntries(candidates.map(({ typeId }) => [typeId, 0.99])),
+					scores: Object.fromEntries(candidates.map(({ typeId }) => [typeId, scores[typeId]])),
 				}));
 			},
 		});
@@ -175,11 +180,34 @@ it("allows several subtypes and rejects results from superseded titles or instal
 			title: "Get lunch at Nuri Village",
 		});
 		await process();
-		expect(plugins.details(dinner.id).subtypes.map(({ typeId }) => typeId)).toEqual([
-			expenseType.id,
-			receiptType.id,
-			mealType.id,
-		]);
+		const details = () => plugins.details(dinner.id);
+		const automaticIds = () => details().subtypes.filter((s) => s.source === "automatic").map((s) => s.typeId);
+		expect(automaticIds()).toEqual([expenseType.id]);
+		expect(details().lastClassification?.matched).toEqual([expenseType.id]);
+
+		const recheck = async () => {
+			classification.request(dinner.id);
+			await classification.processDue(async (write) => db.transaction(write));
+		};
+		scores[expenseType.id] = 0.5;
+		scores[mealType.id] = 0.49;
+		scores[receiptType.id] = 0.1;
+		await recheck();
+		expect(automaticIds()).toEqual([]);
+		expect(details().lastClassification?.matched).toEqual([]);
+
+		scores[mealType.id] = 0.5001;
+		scores[expenseType.id] = 0.5001;
+		await recheck();
+		expect(automaticIds()).toEqual([mealType.id]);
+
+		plugins.setEnabled("nutrition", false);
+		await recheck();
+		expect(automaticIds()).toEqual([expenseType.id]);
+		plugins.setEnabled("nutrition", true);
+		expect(details().classification).toBe("pending");
+		await classification.processDue(async (write) => db.transaction(write));
+		expect(automaticIds()).toEqual([mealType.id]);
 
 		const meal = plugins.details(dinner.id).subtypes.find(({ typeId }) => typeId === mealType.id)!;
 		plugins.write(dinner.id, mealType.id, { revision: meal.revision, data: null });
@@ -192,6 +220,8 @@ it("allows several subtypes and rejects results from superseded titles or instal
 			plugins.details(dinner.id).subtypes.find(({ typeId }) => typeId === mealType.id)?.data,
 		).toBeNull();
 
+		expect(automaticIds()).toEqual([expenseType.id]);
+
 		const second = planner.create(
 			createTask.parse({ title: "Travel plan" }),
 			"Travel plan with dinner",
@@ -202,6 +232,27 @@ it("allows several subtypes and rejects results from superseded titles or instal
 		plugins.setEnabled("nutrition", true);
 		await process();
 		expect(providerInputs.at(-1)).toBe("Book flights");
+
+		plugins.setEnabled("budget", true);
+		const paidLunch = planner.create(createTask.parse({ title: "Paid for lunch" }));
+		const selected = plugins.attachAtCapture(paidLunch.id, mealType.id);
+		scores[mealType.id] = 0.99;
+		scores[expenseType.id] = 0.9;
+		await process();
+		expect(plugins.details(paidLunch.id)).toMatchObject({
+			subtypes: [selected],
+			lastClassification: {
+				evaluated: [mealType.id, expenseType.id, receiptType.id],
+				matched: [mealType.id],
+			},
+		});
+		scores[mealType.id] = 0.7;
+		classification.request(paidLunch.id);
+		await classification.processDue(async (write) => db.transaction(write));
+		expect(plugins.details(paidLunch.id)).toMatchObject({
+			subtypes: [{ typeId: expenseType.id, source: "automatic" }, selected],
+			lastClassification: { matched: [expenseType.id] },
+		});
 	});
 });
 

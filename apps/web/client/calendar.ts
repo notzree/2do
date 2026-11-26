@@ -9,10 +9,25 @@ export function dayKey(date: Date) {
 		String(date.getDate()).padStart(2, "0"),
 	].join("-");
 }
+export function isCarryoverShadow(task: Task, date: string) {
+	return task.currentDay !== date && !!task.carriedFrom?.includes(date);
+}
+export function carryoverShadowLabel(task: Task, date: string) {
+	return [task.title, dueDay(task) === date && dueLabel(task), "Moved to " + (task.currentDay ?? "backlog")]
+		.filter(Boolean).join(" · ");
+}
 export function onDay(task: Task, day: Date) {
-	const s = task.schedule;
+	const date = dayKey(day);
+	if (dueDay(task) === date || (!task.schedule && task.currentDay === date)) return true;
+	return !isCarryoverShadow(task, date) && scheduledOnDay(task, day);
+}
+export function scheduledOnDay(task:Task,day:Date) {
+	const s=task.schedule;
 	if (!s) return false;
-	if (s.type === "day") return s.date === dayKey(day);
+	if (s.type === "day") {
+		const key = dayKey(day);
+		return s.endDateExclusive ? s.date <= key && key < s.endDateExclusive : s.date === key;
+	}
 	const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
 	const next = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
 	return Date.parse(s.start) < +next && Date.parse(s.end) > +start;
@@ -90,4 +105,15 @@ export function timeRange(task: Task) {
 /** Chronological start in local time, including date-only entries at local midnight. */
 export function scheduleStart(schedule: NonNullable<Task["schedule"]>) {
 	return new Date(schedule.type === "day" ? schedule.date + "T00:00:00" : schedule.start);
+}
+
+export function dueDay(task:Task) {
+	return task.due?.type==="day"?task.due.date:task.due?.type==="time"?dayKey(new Date(task.due.at)):undefined;
+}
+export function dueLabel(task:Task) {
+	const due=task.due;
+	if (!due) return "";
+	const timed=due.type==="time";
+	const overdue=!task.completed && (timed ? Date.parse(due.at)<Date.now() : due.date<dayKey(new Date()));
+	return (overdue?"Overdue · ":"Due ")+(timed?new Date(due.at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):due.date);
 }

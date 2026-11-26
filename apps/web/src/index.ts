@@ -7,7 +7,7 @@ type RoutingBindings = {
 export default {
 	fetch(request: Request, env: RoutingBindings) {
 		const { pathname } = new URL(request.url);
-		if (pathname === "/api" || pathname.startsWith("/api/")) {
+		if (pathname === "/hooks/gmail" || pathname === "/hooks/google-calendar" || pathname === "/api" || pathname.startsWith("/api/")) {
 			// In development the API runs as its own Vite dev server, so the
 			// service binding is bypassed in favor of a direct forward.
 			if (env.API_DEV_URL) {

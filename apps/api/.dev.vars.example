@@ -1,3 +1,12 @@
 # Local development vars for the 2do-api Worker. Copy to .dev.vars.
 # LOCAL_PLANNER=enabled signs every loopback request in as the shared dev planner.
 LOCAL_PLANNER="enabled"
+
+# Optional Google integrations. See docs/google-connectors.md.
+# GOOGLE_CONNECTOR_ORIGIN="https://planner.example.com"
+# GOOGLE_CLIENT_ID=""
+# GOOGLE_CLIENT_SECRET=""
+# GOOGLE_TOKEN_KEY=""
+# GMAIL_PUBSUB_TOPIC="projects/PROJECT/topics/gmail"
+# GMAIL_PUSH_SUBSCRIPTION="projects/PROJECT/subscriptions/2do"
+# GMAIL_PUSH_SERVICE_ACCOUNT="push@PROJECT.iam.gserviceaccount.com"

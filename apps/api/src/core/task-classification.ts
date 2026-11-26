@@ -1,7 +1,7 @@
 import type { ClassificationJob } from "../db/task-plugins.ts";
 import type { CommitTaskWrite, PlannerDatabase } from "../interfaces/database.ts";
 import type { Task } from "../interfaces/plan.ts";
-import type { TaskClassifier } from "../interfaces/task-classifier.ts";
+import { classificationThreshold, type TaskClassifier } from "../interfaces/task-classifier.ts";
 import type { TaskPlugins } from "./task-plugins.ts";
 import { PlannerError } from "./planner.ts";
 
@@ -36,9 +36,6 @@ export class TaskClassification {
 		if (!this.planner.task(taskId)) throw new PlannerError(404, "Task not found");
 		const enabled = this.plugins.enabledTypes();
 		if (!enabled.length) throw new PlannerError(409, "Enable a task plugin to classify this task.");
-		const protectedTypes = this.plugins.protectedTypes(taskId);
-		if (enabled.every(({ definition }) => protectedTypes.has(definition.id)))
-			throw new PlannerError(409, "The enabled types have manual decisions or require a compatible version.");
 		this.plugins.db.requestClassification(taskId, Date.now());
 	}
 
@@ -49,11 +46,10 @@ export class TaskClassification {
 		const enabled = this.plugins.enabledTypes();
 		return jobs.map((job) => {
 			const task = this.planner.task(job.taskId);
-			const protectedTypes = this.plugins.protectedTypes(job.taskId);
 			return {
 				job,
 				title: task?.title,
-				candidates: task ? enabled.filter(({ definition }) => !protectedTypes.has(definition.id)) : [],
+				candidates: task ? enabled : [],
 			};
 		});
 	}
@@ -111,9 +107,8 @@ export class TaskClassification {
 			return;
 		}
 		const existing = new Map(db.subtypes(task.id, title).map((s) => [s.typeId, s]));
-		const protectedTypes = this.plugins.protectedTypes(task.id);
-		const automatic = candidates.filter(({ definition }) => !protectedTypes.has(definition.id));
-		const current = automatic.filter(
+		const incompatible = this.plugins.incompatibleTypes(task.id);
+		const current = candidates.filter(
 			({ definition, epoch }) => epochs.get(definition.id) === epoch,
 		);
 		if (
@@ -127,21 +122,35 @@ export class TaskClassification {
 		}
 		// A newer title, a reclaimed lease or a recreated task owns a different token/attempt.
 		if (!db.finish(job)) return;
+		let winner: string | undefined;
+		let highestScore = classificationThreshold;
+		// Strict comparison also keeps the first registered subtype on a tie.
+		for (const { definition } of current) {
+			if (incompatible.has(definition.id) || existing.get(definition.id)?.data === null) continue;
+			const score = scores[definition.id];
+			if (score > highestScore) {
+				winner = definition.id;
+				highestScore = score;
+			}
+		}
 		const decisions = current.map(({ definition, epoch }) => {
-			const matched = scores[definition.id] >= definition.classification.threshold;
+			const matched = definition.id === winner;
+			const prior = existing.get(definition.id);
+			if (prior?.source === "manual" || incompatible.has(definition.id))
+				return { typeId: definition.id, epoch, matched };
 			if (!matched) this.plugins.removeAutomatic(task, definition.id);
-			else if (!existing.has(definition.id))
-				this.plugins.store(task.id, definition, "automatic", definition.initialData, title);
+			else {
+				const record = prior
+					?? this.plugins.store(task.id, definition, "automatic", { ...definition.initialData, ...definition.fromTitle?.(job.rawInput ?? title) }, title);
+				this.plugins.extractTitle?.(task, definition, record, job.rawInput ?? title);
+			}
 			return { typeId: definition.id, epoch, matched };
 		});
 		if (decisions.length)
 			db.saveResult({ taskId: task.id, title, checkedAt: new Date().toISOString(), decisions });
-		// A plugin re-enabled during this call needs an evaluation against its new install epoch.
-		if (
-			automatic.some(
-				({ definition, epoch }) => epochs.has(definition.id) && epochs.get(definition.id) !== epoch,
-			)
-		)
+		// Include any newly eligible install that did not contribute a current score.
+		const evaluated = new Set(current.map(({ definition }) => definition.id));
+		if (Array.from(epochs.keys()).some((id) => !evaluated.has(id)))
 			db.enqueue(task.id, Date.now(), job.rawInput ?? undefined);
 	}
 

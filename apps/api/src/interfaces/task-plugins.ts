@@ -1,3 +1,4 @@
+import { goalType, type GoalSubtypeDefinition } from "./goals.ts";
 import { z } from "zod";
 import { readFieldValue } from "./subtype-field-values.ts";
 export {
@@ -33,6 +34,7 @@ export const taskDetails = z.strictObject({
 	task,
 	subtypes: z.array(taskSubtype),
 	workflows: z.array(workflowDetails).optional(),
+	extracting: z.boolean().optional(),
 	classification: z.enum(["idle", "pending", "failed"]),
 	lastClassification: z
 		.strictObject({
@@ -64,6 +66,8 @@ export const eligibleTaskPrompt = prompt.extend({
 export type EligibleTaskPrompt = z.infer<typeof eligibleTaskPrompt>;
 const field = { key: fieldKey, label: z.string(), inlayLabel: z.string().min(1).optional() };
 const subtypeField = z.discriminatedUnion("kind", [
+	z.strictObject({ ...field, kind: z.literal("text"), maxLength:z.int().positive() }),
+	z.strictObject({ ...field, kind: z.literal("choice"), options:z.array(z.string().min(1)).min(1) }),
 	z.strictObject({
 		...field,
 		kind: z.literal("text-list"),
@@ -86,6 +90,7 @@ export const pluginInstallation = z.strictObject({
 	label: z.string(),
 	description: z.string().optional(),
 	metrics: z.array(metricDefinition).optional(),
+	goalSubtypes: z.array(goalType).optional(),
 	facts: z
 		.array(
 			z.strictObject({
@@ -113,6 +118,8 @@ export const pluginInstallation = z.strictObject({
 			label: z.string(),
 			icon: taskTypeIcon.optional(),
 			captureCommand: pluginId.optional(),
+			captureAliases: z.array(pluginId).optional(),
+			captureTiming: z.literal("deadline").optional(),
 			schemaVersion: z.int().positive(),
 			classification: z
 				.strictObject({ instructions: z.string().min(1), threshold: z.number().min(0).max(1) })
@@ -164,14 +171,18 @@ export interface TaskSubtypeDefinition<Data extends NonNullable<TaskSubtype["dat
 	readonly label: string;
 	readonly icon?: TaskTypeIconName;
 	readonly captureCommand?: string;
+	readonly captureAliases?: Readonly<Record<string, Partial<Data>>>;
 	readonly schemaVersion: number;
 	readonly schema: z.ZodType<Data>;
 	readonly initialData: Data;
-	readonly classification: { readonly instructions: string; readonly threshold: number };
+	readonly captureTiming?: "deadline";
+	readonly fromTitle?: (text: string) => Partial<Data>;
+	readonly extraction?: Readonly<Record<string, string>>;
+	readonly classification: { readonly instructions: string };
 	readonly editor?: TaskSubtypeEditor;
 	readonly prompts?: z.infer<typeof prompt>[];
 	readonly workflow?: PluginWorkflow<Data>;
-	readonly migrations?: Record<number, (data: PluginData) => PluginData>;
+	readonly migrations?: Record<number, (data: PluginData, titles: readonly string[]) => PluginData>;
 	view(task: Task, data: Data): View;
 }
 
@@ -180,6 +191,7 @@ export interface TaskPlugin {
 	readonly label: string;
 	readonly description?: string;
 	readonly metrics?: readonly MetricDefinition[];
+	readonly goalSubtypes?: readonly GoalSubtypeDefinition[];
 	readonly subtypes: readonly TaskSubtypeDefinition<NonNullable<TaskSubtype["data"]>, unknown>[];
 	readonly facts?: readonly PluginFact[];
 	readonly features?: readonly PluginFeature[];

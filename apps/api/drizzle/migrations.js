@@ -6,6 +6,10 @@ import m0003 from './0003_classification_result.sql';
 import m0004 from './0004_time_proposals.sql';
 import m0005 from './0005_capture_classification_source.sql';
 import m0006 from './0006_plugin_workflows.sql';
+import m0007 from './0007_subtype_extraction.sql';
+import m0008 from './0008_calendar_links.sql';
+import m0009 from './0009_planner_goals.sql';
+import m0010 from './0010_preserve_confirmed_logs.sql';
 
   export default {
     journal,
@@ -16,7 +20,11 @@ m0002,
 m0003,
 m0004,
 m0005,
-m0006
+m0006,
+m0007,
+m0008,
+m0009,
+m0010
     }
   }
   

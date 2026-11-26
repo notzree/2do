@@ -150,6 +150,417 @@
     ]
   },
   {
+    "name": "carryOverTasks",
+    "description": "Move unfinished tasks from the previous calendar day",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "timeZone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "date"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/days/{date}/carryover",
+    "queryParameters": [
+      "timeZone"
+    ]
+  },
+  {
+    "name": "listPlannerGoals",
+    "description": "Read planner goals, linked tasks, check-ins and plugin progress",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "method": "get",
+    "pathTemplate": "/api/planner-goals"
+  },
+  {
+    "name": "createPlannerGoal",
+    "description": "Create a personal goal with optional dates and plugin criteria",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "targetDate": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date"
+            },
+            "nextCheckIn": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date"
+            },
+            "subtype": {
+              "type": "object",
+              "properties": {
+                "typeId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "typeId",
+                "version",
+                "data"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "title"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/planner-goals",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "readGoalProgress",
+    "description": "Evaluate the current goal rule against recorded evidence through the selected civil day",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "day": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "id",
+        "day"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/planner-goals/{id}/progress",
+    "queryParameters": [
+      "day"
+    ]
+  },
+  {
+    "name": "editPlannerGoal",
+    "description": "Edit a goal, record a check-in, or change a task contribution or completion link",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "change": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "edit"
+                      ]
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    },
+                    "targetDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date"
+                    },
+                    "nextCheckIn": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date"
+                    },
+                    "subtype": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "typeId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "typeId",
+                        "version",
+                        "data"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "title",
+                    "targetDate",
+                    "nextCheckIn"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "achievement"
+                      ]
+                    },
+                    "achieved": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "achieved"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "link"
+                      ]
+                    },
+                    "taskId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "role": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "contributes",
+                        "satisfies",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "taskId",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "check-in"
+                      ]
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "nextCheckIn": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "note",
+                    "nextCheckIn"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "subtype"
+                      ]
+                    },
+                    "subtype": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "typeId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "typeId",
+                        "version",
+                        "data"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "subtype"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "revision",
+            "change"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "requestBody"
+      ]
+    },
+    "method": "patch",
+    "pathTemplate": "/api/planner-goals/{id}",
+    "requestBodyContentType": "application/json"
+  },
+  {
     "name": "listReview",
     "description": "Read pending time changes",
     "annotations": {
@@ -372,7 +783,8 @@
                             "type": "string",
                             "enum": [
                               "taskRef",
-                              "graphRef"
+                              "graphRef",
+                              "goalRef"
                             ]
                           },
                           "attrs": {
@@ -461,6 +873,10 @@
                     "pattern": "\\S",
                     "description": "Verbatim task body after the slash command."
                   },
+                  "alias": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                  },
                   "typeId": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$",
@@ -475,6 +891,29 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 100
+                  }
+                },
+                "required": [
+                  "id",
+                  "title"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 500
+            },
+            "newGoals": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
                   }
                 },
                 "required": [
@@ -683,6 +1122,58 @@
         "requestBody": {
           "type": "object",
           "properties": {
+            "due": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "day"
+                      ]
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "date"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "time"
+                      ]
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "timeZone": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "at",
+                    "timeZone"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "parentId": {
               "type": [
                 "string",
@@ -721,6 +1212,10 @@
                       ]
                     },
                     "date": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "endDateExclusive": {
                       "type": "string",
                       "format": "date"
                     }
@@ -785,7 +1280,6 @@
                   "type": "null"
                 }
               ],
-              "default": null,
               "description": "An all-day date or a half-open interval with end later than start."
             },
             "durationMinutes": {
@@ -794,8 +1288,7 @@
                 "null"
               ],
               "exclusiveMinimum": 0,
-              "maximum": 525600,
-              "default": null
+              "maximum": 525600
             },
             "id": {
               "type": "string",
@@ -822,6 +1315,26 @@
                 "anchor"
               ],
               "additionalProperties": false
+            },
+            "titleContext": {
+              "type": "object",
+              "properties": {
+                "timeZone": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "defaultDate": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "referenceDate": {
+                  "type": "string",
+                  "format": "date"
+                }
+              },
+              "additionalProperties": false,
+              "description": "Calendar context for dates and times in the title."
             }
           },
           "required": [
@@ -920,6 +1433,58 @@
         "requestBody": {
           "type": "object",
           "properties": {
+            "due": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "day"
+                      ]
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "date"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "time"
+                      ]
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "timeZone": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "at",
+                    "timeZone"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "parentId": {
               "type": [
                 "string",
@@ -955,6 +1520,10 @@
                       ]
                     },
                     "date": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "endDateExclusive": {
                       "type": "string",
                       "format": "date"
                     }

@@ -32,7 +32,7 @@ function version(version: 1 | 2): TaskSubtypeDefinition<PluginData, unknown> {
     schemaVersion: version,
     schema: z.strictObject({ [dataKey]: z.number() }),
     initialData: v1 ? { minutes: 0 } : { hours: 0 },
-    classification: { instructions: "Is this a study session?", threshold: 0.8 },
+    classification: { instructions: "Is this a study session?" },
     view: (_, data) => data,
     migrations: { 1: (data) => ({ hours: Number(data.minutes) / 60 }) },
     workflow: {

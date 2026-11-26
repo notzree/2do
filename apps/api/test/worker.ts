@@ -4,6 +4,22 @@ import type { EffectHandler } from "../src/interfaces/plugin-workflows.ts";
 import type { TaskClassifier } from "../src/interfaces/task-classifier.ts";
 
 export class UserPlanner extends Planner {
+	protected override createExtractor(): import("../src/extractors/clairic.ts").TitleExtractor | undefined {
+		const kv = this.ctx.storage.kv;
+		if (!kv.get("test:title-extractor") && !kv.get("test:task-time")) return;
+		return async (title, fields, signal, referenceDate) => {
+			if (fields.some((field) => field.path === "scheduled_date")) {
+				kv.put("test:timing-input", { title, fields, referenceDate });
+				const taskTitle = title.split("\n\nCalendar reference: ")[0].slice("Task title: ".length);
+				return kv.get<Record<string, Record<string, number | string>>>("test:task-time")?.[taskTitle] ?? {};
+			}
+			if (fields.some(f => f.path === "parent" || f.path === "children"))
+				return kv.get<Record<string, string | string[]>>("test:outline") ?? {};
+			kv.put("test:extraction-input", { title, fields });
+			while (kv.get("test:title-extractor") === "hold") await scheduler.wait(10, { signal });
+			return { foods: ["salmon", "rice"] };
+		};
+	}
 	protected override createEffects(): ReadonlyMap<string, EffectHandler> {
 		const kv = this.ctx.storage.kv;
 		if (!kv.get("test:meal-effects")) return super.createEffects();
@@ -27,12 +43,13 @@ export class UserPlanner extends Planner {
 					while (kv.get("test:provider") === "hold") await scheduler.wait(10, { signal });
 					if (kv.get("test:provider") === "fail") throw new Error("Test provider unavailable");
 				}
+				const forcedType = kv.get<string>("test:winning-subtype");
 				return inputs.map(({ taskId, title, candidates }) => ({
 					taskId,
 					scores: Object.fromEntries(
 						candidates.map(({ typeId }) => [
 							typeId,
-							title.includes("Get dinner at Nuri Village") ? 0.99 : 0.1,
+							(forcedType ? typeId === forcedType : title.includes("Get dinner at Nuri Village")) ? 0.99 : 0.1,
 						]),
 					),
 				}));
@@ -42,3 +59,5 @@ export class UserPlanner extends Planner {
 }
 
 export { default } from "../src/app.ts";
+
+export { GoogleConnection, GmailDirectory } from "../src/connectors/connection.ts";

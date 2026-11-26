@@ -8,6 +8,7 @@ const key = z.string().regex(/^[a-z][a-zA-Z0-9]*$/);
 export const actionId = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 const fieldBase = { key, label: z.string().min(1), required: z.boolean().optional() };
 const actionField = z.discriminatedUnion("kind", [
+  z.strictObject({ ...fieldBase, kind:z.literal("choice"),options:z.array(z.string().min(1)).min(1) }),
   z.strictObject({ ...fieldBase, kind: z.literal("date") }),
   z.strictObject({ ...fieldBase, kind: z.literal("number"), min: z.number().optional() }),
   z.strictObject({ ...fieldBase, kind: z.literal("text"), maxLength: z.int().positive() }),
@@ -26,6 +27,7 @@ export function actionInputSchema(definition: ActionDefinition) {
     if (field.key in fields) throw new Error("Duplicate or reserved action field " + field.key);
     let schema: z.ZodType;
     switch (field.kind) {
+      case "choice": schema=z.enum(field.options); break;
       case "date":
         schema = z.iso.date();
         break;
@@ -82,6 +84,8 @@ export type WorkflowEvent =
   | { kind: "effect"; id: string; result: unknown; failed: boolean };
 export interface WorkflowTransition<State> {
   state: State;
+  /** An explicit user command accepts this subtype as part of the task. */
+  confirmSubtype?: boolean;
   effect?: { id: string; input: PluginData };
 }
 export interface PluginWorkflow<Data = PluginData, State extends PluginData = PluginData> {

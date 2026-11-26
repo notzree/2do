@@ -4,6 +4,9 @@ import worker from "../src/index.ts";
 it.each([
 	["/api", "API"],
 	["/api/health", "API"],
+	["/hooks/gmail", "API"],
+	["/hooks/google-calendar", "API"],
+	["/hooks/gmail/other", "ASSETS"],
 	["/apiary", "ASSETS"],
 ] as const)("routes %s to %s", async (path, target) => {
 	const env = {

@@ -437,3 +437,11 @@ button.theme-card[aria-pressed="true"] {
     gap: 0.5rem;
   }
 }
+
+.connections { display: grid; gap: 1.5rem; }
+.connection-card { border-bottom: 1px solid var(--border); padding: 1rem 0; }
+.connection-card h2 { margin: 0; font-size: 1rem; }
+.connection-card p { line-height: 1.5; }
+.connection-actions, .connection-card fieldset { display: flex; flex-wrap: wrap; gap: .75rem; }
+.connection-card fieldset { margin: 1rem 0; }
+.connection-card label { display: inline-flex; align-items: center; gap: .35rem; }

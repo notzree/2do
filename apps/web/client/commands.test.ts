@@ -32,6 +32,7 @@ function editor(text: string, offset = text.length, catalog: readonly SlashComma
 		tasks: [],
 		navigate() {},
 		image() {},
+		carryover() {},
 		chat(name, body) {
 			chats.push(name + ":" + body);
 			return true;
@@ -66,6 +67,15 @@ function editor(text: string, offset = text.length, catalog: readonly SlashComma
 }
 
 describe("inline slash commands", () => {
+	it("executes carryover once and removes the slash command from the page", () => {
+		const e = editor("/carryover");
+		let calls = 0;
+		e.actions.carryover = () => { calls++; };
+		expect(e.key("Enter")).toBe(true);
+		expect(calls).toBe(1);
+		expect(e.view.state.doc.textContent).toBe("");
+		expect(e.captures).toEqual([]);
+	});
 	const nutrition = {
 		id: "nutrition",
 		label: "Nutrition",
@@ -222,4 +232,15 @@ describe("inline slash commands", () => {
 		const e = editor("/next-w");
 		expect(slashOptions(slashInput(e.view.state)!, []).map((x) => x.label)).toEqual(["/next week"]);
 	});
+});
+
+it("captures a standalone goal reference and passes the declared activity alias through capture",()=>{
+  const goal=editor("/goal Feel ready for interviews");
+  goal.key("Enter");
+  expect(goal.view.state.doc.firstChild?.type.name).toBe("goalRef");
+  expect(goal.captures).toEqual([]);
+  const catalog=notebookCommands([{id:"fitness",label:"Fitness",enabled:true,subtypes:[{id:"fitness.activity",label:"Activity",schemaVersion:1,captureCommand:"activity",captureAliases:["sport"]}]}]);
+  const sport=editor("/sport Volleyball",undefined,catalog);
+  sport.key("Enter");
+  expect(sport.captures).toMatchObject([{typeId:"fitness.activity",alias:"sport",rawInput:"Volleyball"}]);
 });

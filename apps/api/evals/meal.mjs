@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { ClefTaskClassifier } from "../src/classifiers/clef.ts";
+import { classificationThreshold } from "../src/interfaces/task-classifier.ts";
 import { mealType } from "../src/plugins/meal.ts";
 
 // Synthetic planner entries. Each label says whether the author is having a meal.
@@ -40,17 +41,17 @@ const classifier = ClefTaskClassifier.using({
 		);
 	},
 });
-const { instructions, threshold } = mealType.classification;
+const { instructions } = mealType.classification;
 const candidates = [{ typeId: mealType.id, instructions }];
 const results = [];
 for (const [title, expected] of cases) {
 	const [result] = await classifier.classify([{ taskId: title, title, candidates }]);
 	const score = result.scores[mealType.id];
-	results.push({ title, expected, score, matched: score >= threshold });
+	results.push({ title, expected, score, matched: score > classificationThreshold });
 }
 console.table(results);
 const misses = results.filter((row) => row.expected && !row.matched).length;
 const falsePositives = results.filter((row) => !row.expected && row.matched).length;
 console.log(
-	`${results.length - misses - falsePositives}/${results.length} correct at ${threshold} (${misses} missed meals, ${falsePositives} false positives)`,
+	`${results.length - misses - falsePositives}/${results.length} correct with score > ${classificationThreshold} (${misses} missed meals, ${falsePositives} false positives)`,
 );

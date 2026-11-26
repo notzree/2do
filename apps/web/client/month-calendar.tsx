@@ -14,7 +14,7 @@ import {
   fullDate,
   monthDays,
   offsetDay,
-  onDay,
+  onDay, dueDay,
   scheduleStart,
   timeRange,
   type WeekStart,
@@ -80,7 +80,7 @@ export function MonthCalendar({ date, weekStart, tasks, update, open, select, op
           ))}
           {days.map((day) => {
             const key = dayKey(day);
-            const items = scheduled.filter(({ task }) => onDay(task, day));
+            const items = tasks.filter(task=>(task.parentId===null || dueDay(task)===key) && onDay(task,day));
             const entries = goals.get(key) ?? [];
             const met = entries.filter(({ entry }) => entry.outcome === "met").length;
             const progress = entries.filter(({ entry }) => entry.outcome === "inProgress").length;
@@ -106,9 +106,9 @@ export function MonthCalendar({ date, weekStart, tasks, update, open, select, op
                 {goalSummary && <span className="calendar-goal-count" aria-hidden="true">{goalSummary}</span>}
                 {items.length > 0 && (
                   <ul className="calendar-tasks">
-                    {items.map(({ task }) => (
+                    {items.map((task) => (
                       <li key={task.id}>
-                        <TaskTitle task={task} update={update}
+                        {dueDay(task)===key && <small>Due </small>}<TaskTitle task={task} update={update}
                           data-completed={task.completed}
                           title={task.title}
                           onClick={() => open(task)}

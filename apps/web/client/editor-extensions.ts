@@ -13,7 +13,7 @@ import { NotebookReference } from "./notebook-reference.tsx";
 const Strong = Bold.extend({ name: "strong" });
 const Em = Italic.extend({ name: "em" });
 
-function referenceNode(name: "taskRef" | "graphRef") {
+function referenceNode(name: "taskRef" | "graphRef" | "goalRef") {
 	return Node.create({
 		name,
 		group: "block",
@@ -107,6 +107,7 @@ export function editorExtensions(): Extensions {
 		Underline,
 		referenceNode("taskRef"),
 		referenceNode("graphRef"),
+		referenceNode("goalRef"),
 		Image,
 		History,
 	];

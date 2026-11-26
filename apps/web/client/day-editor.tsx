@@ -1,3 +1,5 @@
+import { carryOver } from "./carryover.tsx";
+import type { Task } from "@2do/api/plan";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { slashKeyDown, slashPlugin, type SlashActions } from "./slash-editor.ts";
@@ -41,7 +43,7 @@ import { dayBuffer, type DayBuffer } from "./day-buffer.ts";
 import { editorExtensions, notebookDocument } from "./editor-extensions.ts";
 import { bindNotebookEditorEvents, NotebookVim, type EditorMode } from "./editor-navigation.ts";
 import { addLine, lineStart, motion, moveLine, removeDeletedTask } from "./editor-keys.ts";
-import { dayKey, formatDate, onDay } from "./calendar.ts";
+import { carryoverShadowLabel, dayKey, formatDate, onDay, isCarryoverShadow } from "./calendar.ts";
 import { TaskList, type ListActions } from "./agenda.tsx";
 
 type EditorNavigationProps = {
@@ -94,7 +96,25 @@ export function DayEditor({
 		[buffer],
 	);
 	const error = state.error ?? page.error?.message;
-	const scheduled = actions.plan.tasks.filter((t) => onDay(t, day) && !refs.has(t.id));
+	const nested = new Map<string, Task[]>();
+	const byId = new Map(actions.plan.tasks.map(task => [task.id, task]));
+	const scheduled = actions.plan.tasks.filter(task => {
+		if (refs.has(task.id) || isCarryoverShadow(task, date)) return false;
+		const scheduledHere = onDay(task, day);
+		if (!scheduledHere && (task.schedule || task.currentDay || task.due)) return false;
+		let parent = task.parentId && byId.get(task.parentId);
+		while (parent) {
+			if (refs.has(parent.id) && !isCarryoverShadow(parent, date)) {
+				const group = nested.get(parent.id) ?? [];
+				group.push(task);
+				nested.set(parent.id, group);
+				return false;
+			}
+			if (!onDay(parent, day)) break;
+			parent = parent.parentId && byId.get(parent.parentId);
+		}
+		return scheduledHere;
+	});
 	return (
 		<article
 			className="day-sheet"
@@ -125,7 +145,10 @@ export function DayEditor({
 					</button>
 				)}
 			</div>
-			{scheduled.length > 0 && <TaskList tasks={scheduled} {...actions} />}
+			{actions.plan.tasks.filter(task => !refs.has(task.id) && isCarryoverShadow(task, date)).map(task =>
+				<div key={task.id} className="muted carryover-shadow">{carryoverShadowLabel(task, date)}</div>
+			)}
+			{scheduled.length > 0 && <TaskList day={day} tasks={scheduled} {...actions} />}
 			{state.generation !== null ? (
 				<WritingSurface
 					key={state.generation}
@@ -133,6 +156,7 @@ export function DayEditor({
 					vim={vim}
 					bindings={bindings}
 					actions={actions}
+					nested={nested}
 					toggleFocus={toggleFocus}
 					onFocusRequested={onFocusRequested}
 					shiftPeriod={shiftPeriod}
@@ -192,7 +216,7 @@ const WritingPlugins = Extension.create({
 });
 
 function WritingSurface({
-	buffer,
+	buffer, nested,
 	vim,
 	bindings,
 	actions,
@@ -201,6 +225,7 @@ function WritingSurface({
 	shiftPeriod,
 }: EditorNavigationProps & {
 	buffer: DayBuffer;
+	nested: Map<string, Task[]>;
 	vim: boolean;
 	bindings: Bindings;
 	actions: ListActions;
@@ -225,11 +250,13 @@ function WritingSurface({
 		() => [
 			...editorExtensions(),
 			NotebookVim.configure({ deleteTask: (id) => {
+				const task = latest.current.actions.plan.tasks.find(item => item.id === id);
+				if (task && isCarryoverShadow(task, buffer.date)) return;
 				void latest.current.actions.mutate.deleteTask(id);
 			} }),
 			WritingPlugins.configure({}),
 		],
-		[],
+		[buffer],
 	);
 
 	function syncView(view: EditorView) {
@@ -242,6 +269,14 @@ function WritingSurface({
 		tasks: actions.plan.tasks,
 		navigate: (period) => navigation?.go(period),
 		image: () => file.current?.click(),
+		async carryover() {
+			try {
+				const count = await carryOver(buffer.date);
+				setMessage(count ? `Carried over ${count} ${count === 1 ? "task" : "tasks"}.` : "No unfinished tasks to carry over.");
+			} catch (error) {
+				setMessage(error instanceof Error ? error.message : "Carryover failed.");
+			}
+		},
 		chat(name, body) {
 			if (name === "agent" && body && useChats.getState().composers.me?.busy) {
 				setMessage("The main chat is still responding. Press Enter to send when it finishes.");
@@ -425,6 +460,7 @@ function WritingSurface({
 					) {
 						const task = opts.actions.plan.tasks.find((item) => item.id === node.attrs.id);
 						if (task) {
+							if (key === "x" && isCarryoverShadow(task, buffer.date)) return true;
 							if (key === "x")
 								void opts.actions.mutate.updateTask(task.id, {
 									revision: task.revision,
@@ -450,6 +486,7 @@ function WritingSurface({
 				buffer.change(
 					notebookDocument(editor.state.doc) as NotebookDoc,
 					transaction.getMeta("newTask"),
+					transaction.getMeta("newGoal"),
 				);
 			},
 			onTransaction({ editor, transaction }) {
@@ -516,7 +553,7 @@ function WritingSurface({
 				}
 			}}
 		>
-			<NotebookReferences.Provider value={{ actions, buffer }}>
+			<NotebookReferences.Provider value={{ actions, buffer, nested }}>
 				<EditorContent editor={tiptapEditor} />
 			</NotebookReferences.Provider>
 			{active && tiptapEditor && (!vim || mode === "Insert") && (

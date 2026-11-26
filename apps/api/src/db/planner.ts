@@ -53,7 +53,8 @@ export class SqlitePlannerDatabase implements PlannerDatabase {
 						? undefined
 						: sql`json_extract(${doc}, '$.completed') = ${Number(completed)}`,
 					or(
-						date === undefined ? undefined : sql`json_extract(${doc}, '$.schedule.date') = ${date}`,
+						date === undefined ? undefined : sql`((json_extract(${doc}, '$.schedule') IS NULL AND json_extract(${doc}, '$.currentDay') = ${date}) OR json_extract(${doc}, '$.due.date') = ${date} OR json_extract(${doc}, '$.schedule.date') = ${date} OR (json_extract(${doc}, '$.schedule.date') < ${date} AND json_extract(${doc}, '$.schedule.endDateExclusive') > ${date}))`,
+						interval && sql`julianday(json_extract(${doc}, '$.due.at')) >= julianday(${interval.start}) AND julianday(json_extract(${doc}, '$.due.at')) < julianday(${interval.end})`,
 						interval &&
 							sql`julianday(json_extract(${doc}, '$.schedule.start')) < julianday(${interval.end})
 					AND julianday(json_extract(${doc}, '$.schedule.end')) > julianday(${interval.start})`,
@@ -83,7 +84,7 @@ export class SqlitePlannerDatabase implements PlannerDatabase {
 			.from(days)
 			.where(sql`exists (
 			select 1 from json_each(${days.document}, '$.content') as block
-			where json_extract(block.value, '$.attrs.id') = ${id}
+			where json_extract(block.value, '$.type') IN ('taskRef', 'graphRef') AND json_extract(block.value, '$.attrs.id') = ${id}
 		)`)
 			.orderBy(days.day)
 			.all();

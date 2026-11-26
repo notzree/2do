@@ -6,6 +6,7 @@ export const summaryBatchSize = 64;
 export const summaryRequest = z.strictObject({ ids: z.array(taskId).min(1).max(summaryBatchSize) });
 export const taskSummary = z.strictObject({
   id: taskId,
+  extracting: taskDetails.shape.extracting,
   classification: taskDetails.shape.classification,
   types: z.array(taskSubtype.pick({ typeId: true, source: true }).extend({
     label: z.string(), icon: taskTypeIcon.optional(),

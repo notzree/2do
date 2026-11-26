@@ -159,6 +159,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/days/{date}/carryover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move unfinished tasks from the previous calendar day */
+        post: operations["carryOverTasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/carryover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read automatic carryover settings */
+        get: operations["readCarryoverSettings"];
+        /** Configure daily carryover at 6 AM in the selected time zone */
+        put: operations["setCarryoverSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planner-goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read planner goals, linked tasks, check-ins and plugin progress */
+        get: operations["listPlannerGoals"];
+        put?: never;
+        /** Create a personal goal with optional dates and plugin criteria */
+        post: operations["createPlannerGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planner-goals/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evaluate the current goal rule against recorded evidence through the selected civil day */
+        get: operations["readGoalProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/planner-goals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a goal, record a check-in, or change a task contribution or completion link */
+        patch: operations["editPlannerGoal"];
+        trace?: never;
+    };
     "/api/review": {
         parameters: {
             query?: never;
@@ -416,6 +503,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/revision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["planRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks": {
         parameters: {
             query?: never;
@@ -556,6 +659,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["connectionStatus"];
+        put?: never;
+        post?: never;
+        delete: operations["disconnectProvider"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{kind}/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["authorizeConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{kind}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["completeConnection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/google-calendar/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["calendarSyncDirections"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/{id}/calendar-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCalendarLink"];
+        put: operations["setCalendarLink"];
+        post?: never;
+        delete: operations["deletePublishedEvent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -666,6 +849,7 @@ export interface components {
         TaskSummaries: {
             /** Format: uuid */
             id: string;
+            extracting?: boolean;
             /** @enum {string} */
             classification: "idle" | "pending" | "failed";
             types: {
@@ -740,7 +924,7 @@ export interface components {
                     }[];
                 } | {
                     /** @enum {string} */
-                    type: "taskRef" | "graphRef";
+                    type: "taskRef" | "graphRef" | "goalRef";
                     attrs: {
                         /** Format: uuid */
                         id: string;
@@ -776,7 +960,7 @@ export interface components {
                     }[];
                 } | {
                     /** @enum {string} */
-                    type: "taskRef" | "graphRef";
+                    type: "taskRef" | "graphRef" | "goalRef";
                     attrs: {
                         /** Format: uuid */
                         id: string;
@@ -796,6 +980,7 @@ export interface components {
                 title: string;
                 /** @description Verbatim task body after the slash command. */
                 rawInput?: string;
+                alias?: string;
                 /** @description Explicitly attach an enabled subtype with a capture command. */
                 typeId?: string;
                 /**
@@ -804,6 +989,11 @@ export interface components {
                  */
                 captureDate?: string;
                 timeZone?: string;
+            }[];
+            newGoals?: {
+                /** Format: uuid */
+                id: string;
+                title: string;
             }[];
         };
         ImageReceipt: {
@@ -833,7 +1023,32 @@ export interface components {
             tasks: {
                 /** Format: uuid */
                 id: string;
+                /**
+                 * Format: date
+                 * @description Local creation date, when known.
+                 */
+                createdDate?: string;
+                /**
+                 * Format: date
+                 * @description Current planner day; null for an unassigned task.
+                 */
+                currentDay?: string | null;
+                /** @description Previous planner days, one per carryover. */
+                carriedFrom?: string[];
+                siblingOrder?: number;
                 revision: number;
+                due?: {
+                    /** @enum {string} */
+                    type: "day";
+                    /** Format: date */
+                    date: string;
+                } | {
+                    /** @enum {string} */
+                    type: "time";
+                    /** Format: date-time */
+                    at: string;
+                    timeZone: string;
+                } | null;
                 /** Format: uuid */
                 parentId: string | null;
                 title: string;
@@ -846,6 +1061,8 @@ export interface components {
                     type: "day";
                     /** Format: date */
                     date: string;
+                    /** Format: date */
+                    endDateExclusive?: string;
                 } | {
                     /** @enum {string} */
                     type: "fixed";
@@ -894,7 +1111,32 @@ export interface components {
             tasks: {
                 /** Format: uuid */
                 id: string;
+                /**
+                 * Format: date
+                 * @description Local creation date, when known.
+                 */
+                createdDate?: string;
+                /**
+                 * Format: date
+                 * @description Current planner day; null for an unassigned task.
+                 */
+                currentDay?: string | null;
+                /** @description Previous planner days, one per carryover. */
+                carriedFrom?: string[];
+                siblingOrder?: number;
                 revision: number;
+                due?: {
+                    /** @enum {string} */
+                    type: "day";
+                    /** Format: date */
+                    date: string;
+                } | {
+                    /** @enum {string} */
+                    type: "time";
+                    /** Format: date-time */
+                    at: string;
+                    timeZone: string;
+                } | null;
                 /** Format: uuid */
                 parentId: string | null;
                 title: string;
@@ -907,6 +1149,8 @@ export interface components {
                     type: "day";
                     /** Format: date */
                     date: string;
+                    /** Format: date */
+                    endDateExclusive?: string;
                 } | {
                     /** @enum {string} */
                     type: "fixed";
@@ -934,7 +1178,32 @@ export interface components {
         Task: {
             /** Format: uuid */
             id: string;
+            /**
+             * Format: date
+             * @description Local creation date, when known.
+             */
+            createdDate?: string;
+            /**
+             * Format: date
+             * @description Current planner day; null for an unassigned task.
+             */
+            currentDay?: string | null;
+            /** @description Previous planner days, one per carryover. */
+            carriedFrom?: string[];
+            siblingOrder?: number;
             revision: number;
+            due?: {
+                /** @enum {string} */
+                type: "day";
+                /** Format: date */
+                date: string;
+            } | {
+                /** @enum {string} */
+                type: "time";
+                /** Format: date-time */
+                at: string;
+                timeZone: string;
+            } | null;
             /** Format: uuid */
             parentId: string | null;
             title: string;
@@ -947,6 +1216,8 @@ export interface components {
                 type: "day";
                 /** Format: date */
                 date: string;
+                /** Format: date */
+                endDateExclusive?: string;
             } | {
                 /** @enum {string} */
                 type: "fixed";
@@ -965,6 +1236,18 @@ export interface components {
             durationMinutes: number | null;
         };
         CreateTask: {
+            due?: {
+                /** @enum {string} */
+                type: "day";
+                /** Format: date */
+                date: string;
+            } | {
+                /** @enum {string} */
+                type: "time";
+                /** Format: date-time */
+                at: string;
+                timeZone: string;
+            } | null;
             /**
              * Format: uuid
              * @default null
@@ -978,15 +1261,14 @@ export interface components {
             kind?: "task" | "event" | "milestone";
             /** @default false */
             completed?: boolean;
-            /**
-             * @description An all-day date or a half-open interval with end later than start.
-             * @default null
-             */
+            /** @description An all-day date or a half-open interval with end later than start. */
             schedule?: {
                 /** @enum {string} */
                 type: "day";
                 /** Format: date */
                 date: string;
+                /** Format: date */
+                endDateExclusive?: string;
             } | {
                 /** @enum {string} */
                 type: "fixed";
@@ -1002,7 +1284,6 @@ export interface components {
                 /** Format: date-time */
                 end: string;
             } | null;
-            /** @default null */
             durationMinutes?: number | null;
             /**
              * Format: uuid
@@ -1015,8 +1296,28 @@ export interface components {
                 /** Format: uuid */
                 anchor: string;
             };
+            /** @description Calendar context for dates and times in the title. */
+            titleContext?: {
+                timeZone?: string;
+                /** Format: date */
+                defaultDate?: string;
+                /** Format: date */
+                referenceDate?: string;
+            };
         };
         PatchTask: {
+            due?: {
+                /** @enum {string} */
+                type: "day";
+                /** Format: date */
+                date: string;
+            } | {
+                /** @enum {string} */
+                type: "time";
+                /** Format: date-time */
+                at: string;
+                timeZone: string;
+            } | null;
             /** Format: uuid */
             parentId?: string | null;
             title?: string;
@@ -1029,6 +1330,8 @@ export interface components {
                 type: "day";
                 /** Format: date */
                 date: string;
+                /** Format: date */
+                endDateExclusive?: string;
             } | {
                 /** @enum {string} */
                 type: "fixed";
@@ -1052,7 +1355,32 @@ export interface components {
             task: {
                 /** Format: uuid */
                 id: string;
+                /**
+                 * Format: date
+                 * @description Local creation date, when known.
+                 */
+                createdDate?: string;
+                /**
+                 * Format: date
+                 * @description Current planner day; null for an unassigned task.
+                 */
+                currentDay?: string | null;
+                /** @description Previous planner days, one per carryover. */
+                carriedFrom?: string[];
+                siblingOrder?: number;
                 revision: number;
+                due?: {
+                    /** @enum {string} */
+                    type: "day";
+                    /** Format: date */
+                    date: string;
+                } | {
+                    /** @enum {string} */
+                    type: "time";
+                    /** Format: date-time */
+                    at: string;
+                    timeZone: string;
+                } | null;
                 /** Format: uuid */
                 parentId: string | null;
                 title: string;
@@ -1065,6 +1393,8 @@ export interface components {
                     type: "day";
                     /** Format: date */
                     date: string;
+                    /** Format: date */
+                    endDateExclusive?: string;
                 } | {
                     /** @enum {string} */
                     type: "fixed";
@@ -1112,6 +1442,13 @@ export interface components {
                         label: string;
                         required?: boolean;
                         /** @enum {string} */
+                        kind: "choice";
+                        options: string[];
+                    } | {
+                        key: string;
+                        label: string;
+                        required?: boolean;
+                        /** @enum {string} */
                         kind: "date";
                     } | {
                         key: string;
@@ -1139,6 +1476,7 @@ export interface components {
                     };
                 }[];
             }[];
+            extracting?: boolean;
             /** @enum {string} */
             classification: "idle" | "pending" | "failed";
             lastClassification?: {
@@ -1178,6 +1516,30 @@ export interface components {
                 /** @enum {string} */
                 reducer: "sum";
             }[];
+            goalSubtypes?: {
+                id: string;
+                label: string;
+                version: number;
+                fields: ({
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    kind: "number";
+                    min: number;
+                    integer?: boolean;
+                } | {
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    kind: "choice";
+                    options: string[];
+                } | {
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    kind: "month";
+                })[];
+            }[];
             facts?: {
                 id: string;
                 version: number;
@@ -1201,6 +1563,9 @@ export interface components {
                 /** @enum {string} */
                 icon?: "tag" | "utensils" | "book" | "calendar" | "card" | "activity";
                 captureCommand?: string;
+                captureAliases?: string[];
+                /** @enum {string} */
+                captureTiming?: "deadline";
                 schemaVersion: number;
                 classification?: {
                     instructions: string;
@@ -1210,6 +1575,13 @@ export interface components {
                     id: string;
                     label: string;
                     fields?: ({
+                        key: string;
+                        label: string;
+                        required?: boolean;
+                        /** @enum {string} */
+                        kind: "choice";
+                        options: string[];
+                    } | {
                         key: string;
                         label: string;
                         required?: boolean;
@@ -1242,6 +1614,20 @@ export interface components {
                     label?: string;
                     requiredTogether?: boolean;
                     fields: ({
+                        key: string;
+                        label: string;
+                        inlayLabel?: string;
+                        /** @enum {string} */
+                        kind: "text";
+                        maxLength: number;
+                    } | {
+                        key: string;
+                        label: string;
+                        inlayLabel?: string;
+                        /** @enum {string} */
+                        kind: "choice";
+                        options: string[];
+                    } | {
                         key: string;
                         label: string;
                         inlayLabel?: string;
@@ -1282,6 +1668,30 @@ export interface components {
                 /** @enum {string} */
                 reducer: "sum";
             }[];
+            goalSubtypes?: {
+                id: string;
+                label: string;
+                version: number;
+                fields: ({
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    kind: "number";
+                    min: number;
+                    integer?: boolean;
+                } | {
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    kind: "choice";
+                    options: string[];
+                } | {
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    kind: "month";
+                })[];
+            }[];
             facts?: {
                 id: string;
                 version: number;
@@ -1305,6 +1715,9 @@ export interface components {
                 /** @enum {string} */
                 icon?: "tag" | "utensils" | "book" | "calendar" | "card" | "activity";
                 captureCommand?: string;
+                captureAliases?: string[];
+                /** @enum {string} */
+                captureTiming?: "deadline";
                 schemaVersion: number;
                 classification?: {
                     instructions: string;
@@ -1314,6 +1727,13 @@ export interface components {
                     id: string;
                     label: string;
                     fields?: ({
+                        key: string;
+                        label: string;
+                        required?: boolean;
+                        /** @enum {string} */
+                        kind: "choice";
+                        options: string[];
+                    } | {
                         key: string;
                         label: string;
                         required?: boolean;
@@ -1346,6 +1766,20 @@ export interface components {
                     label?: string;
                     requiredTogether?: boolean;
                     fields: ({
+                        key: string;
+                        label: string;
+                        inlayLabel?: string;
+                        /** @enum {string} */
+                        kind: "text";
+                        maxLength: number;
+                    } | {
+                        key: string;
+                        label: string;
+                        inlayLabel?: string;
+                        /** @enum {string} */
+                        kind: "choice";
+                        options: string[];
+                    } | {
                         key: string;
                         label: string;
                         inlayLabel?: string;
@@ -2248,6 +2682,676 @@ export interface operations {
             };
             /** @description The supplied X-Planner-Scope belongs to another planner */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    carryOverTasks: {
+        parameters: {
+            query?: {
+                timeZone?: string;
+            };
+            header?: never;
+            path: {
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date */
+                        from: string;
+                        /** Format: date */
+                        to: string;
+                        moved: number;
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    readCarryoverSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                        timeZone: string;
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setCarryoverSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                    timeZone: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                        timeZone: string;
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unsupported media type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listPlannerGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        title: string;
+                        /** Format: date */
+                        targetDate: string | null;
+                        /** Format: date */
+                        nextCheckIn: string | null;
+                        manualAchievement: boolean;
+                        subtype: {
+                            typeId: string;
+                            version: number;
+                            data: {
+                                [key: string]: string | number;
+                            };
+                        } | null;
+                        timeZone: string;
+                        dailyMetric: string | null;
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        revision: string;
+                        achieved: boolean;
+                        progress: {
+                            label: string;
+                            satisfied: boolean;
+                        } | null;
+                        links: {
+                            /** Format: uuid */
+                            taskId: string;
+                            title: string;
+                            completed: boolean;
+                            /** @enum {string} */
+                            role: "contributes" | "satisfies";
+                        }[];
+                        checkIns: {
+                            /** Format: date-time */
+                            at: string;
+                            note: string;
+                        }[];
+                    }[];
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createPlannerGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    id: string;
+                    title: string;
+                    /** Format: date */
+                    targetDate?: string | null;
+                    /** Format: date */
+                    nextCheckIn?: string | null;
+                    subtype?: {
+                        typeId: string;
+                        version: number;
+                        data: {
+                            [key: string]: string | number;
+                        };
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        title: string;
+                        /** Format: date */
+                        targetDate: string | null;
+                        /** Format: date */
+                        nextCheckIn: string | null;
+                        manualAchievement: boolean;
+                        subtype: {
+                            typeId: string;
+                            version: number;
+                            data: {
+                                [key: string]: string | number;
+                            };
+                        } | null;
+                        timeZone: string;
+                        dailyMetric: string | null;
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        revision: string;
+                        achieved: boolean;
+                        progress: {
+                            label: string;
+                            satisfied: boolean;
+                        } | null;
+                        links: {
+                            /** Format: uuid */
+                            taskId: string;
+                            title: string;
+                            completed: boolean;
+                            /** @enum {string} */
+                            role: "contributes" | "satisfies";
+                        }[];
+                        checkIns: {
+                            /** Format: date-time */
+                            at: string;
+                            note: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision, graph or ID conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unsupported media type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    readGoalProgress: {
+        parameters: {
+            query: {
+                day: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        label: string;
+                        satisfied: boolean;
+                    } | null;
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    editPlannerGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    revision: string;
+                    change: {
+                        /** @enum {string} */
+                        action: "edit";
+                        title: string;
+                        /** Format: date */
+                        targetDate: string | null;
+                        /** Format: date */
+                        nextCheckIn: string | null;
+                        subtype?: {
+                            typeId: string;
+                            version: number;
+                            data: {
+                                [key: string]: string | number;
+                            };
+                        } | null;
+                    } | {
+                        /** @enum {string} */
+                        action: "achievement";
+                        achieved: boolean;
+                    } | {
+                        /** @enum {string} */
+                        action: "link";
+                        /** Format: uuid */
+                        taskId: string;
+                        /** @enum {string|null} */
+                        role: "contributes" | "satisfies" | null;
+                    } | {
+                        /** @enum {string} */
+                        action: "check-in";
+                        note: string;
+                        /** Format: date */
+                        nextCheckIn: string | null;
+                    } | {
+                        /** @enum {string} */
+                        action: "subtype";
+                        subtype: {
+                            typeId: string;
+                            version: number;
+                            data: {
+                                [key: string]: string | number;
+                            };
+                        } | null;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        title: string;
+                        /** Format: date */
+                        targetDate: string | null;
+                        /** Format: date */
+                        nextCheckIn: string | null;
+                        manualAchievement: boolean;
+                        subtype: {
+                            typeId: string;
+                            version: number;
+                            data: {
+                                [key: string]: string | number;
+                            };
+                        } | null;
+                        timeZone: string;
+                        dailyMetric: string | null;
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        revision: string;
+                        achieved: boolean;
+                        progress: {
+                            label: string;
+                            satisfied: boolean;
+                        } | null;
+                        links: {
+                            /** Format: uuid */
+                            taskId: string;
+                            title: string;
+                            completed: boolean;
+                            /** @enum {string} */
+                            role: "contributes" | "satisfies";
+                        }[];
+                        checkIns: {
+                            /** Format: date-time */
+                            at: string;
+                            note: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision, graph or ID conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unsupported media type */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3671,6 +4775,55 @@ export interface operations {
             };
         };
     };
+    planRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revision: number;
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listTasks: {
         parameters: {
             query?: never;
@@ -4558,6 +5711,466 @@ export interface operations {
             };
             /** @description Resource not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision, graph or ID conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    connectionStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "gmail" | "google-calendar";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        account: string | null;
+                        directions: {
+                            importEvents: boolean;
+                            exportEvents: boolean;
+                        };
+                        lastSync: number | null;
+                        error: string | null;
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    disconnectProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "gmail" | "google-calendar";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    authorizeConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "gmail" | "google-calendar";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    importEvents: boolean;
+                    exportEvents: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uri */
+                        url: string;
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    completeConnection: {
+        parameters: {
+            query: {
+                state: string;
+                code?: string;
+                error?: string;
+            };
+            header?: never;
+            path: {
+                kind: "gmail" | "google-calendar";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Return to Connections settings */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or declined consent */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    calendarSyncDirections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    importEvents: boolean;
+                    exportEvents: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        authorized: boolean;
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCalendarLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "unlinked" | "imported" | "linked" | "conflict";
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setCalendarLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "unlinked" | "imported" | "linked" | "conflict";
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Revision, graph or ID conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The supplied X-Planner-Scope belongs to another planner */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deletePublishedEvent: {
+        parameters: {
+            query?: {
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        queued: true;
+                    };
+                };
+            };
+            /** @description Cloudflare Access authentication required */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

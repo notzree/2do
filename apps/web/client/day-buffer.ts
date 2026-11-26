@@ -32,6 +32,7 @@ export class DayBuffer {
 		return this.store.getState();
 	}
 	private timer: ReturnType<typeof setTimeout> | undefined;
+	private pendingGoals = new Map<string,{id:string;title:string}>();
 	private pending = new Map<string, NewTask>();
 	private optimisticTitles = new Map<string, string>();
 	private revision = 0;
@@ -63,7 +64,8 @@ export class DayBuffer {
 	}
 	private writeBody(doc: NotebookDoc): WritePage {
 		const ids = referenceIds(doc);
-		return { version: 1, revision: this.revision, doc,
+		const goals = doc.content.flatMap(n=>n.type==="goalRef" && this.pendingGoals.has(n.attrs.id)?[this.pendingGoals.get(n.attrs.id)!]:[]);
+		return { version: 1, revision: this.revision, doc, ...(goals.length && {newGoals:goals}),
 			newTasks: [...this.pending.values()].filter((task) => ids.has(task.id)) };
 	}
 	get hasChanges() {
@@ -111,6 +113,7 @@ export class DayBuffer {
 		this.revision = draft.current.revision;
 		this.savedDoc = page.revision === this.revision ? page.doc : undefined;
 		this.dirty = true;
+		for (const goal of draft.current.newGoals ?? []) this.pendingGoals.set(goal.id,goal);
 		for (const task of draft.current.newTasks) {
 			this.pending.set(task.id, task);
 			this.optimisticTitles.set(task.id, task.title);
@@ -130,6 +133,7 @@ export class DayBuffer {
 		this.dirty = false;
 		this.retryBody = undefined;
 		this.pending.clear();
+		this.pendingGoals.clear();
 		if (this.optimisticTitles.size) {
 			const refs = referenceIds(page.doc);
 			for (const id of this.optimisticTitles.keys())
@@ -146,7 +150,8 @@ export class DayBuffer {
 			this.publish({ ...this.state, error: "Could not load the saved page." });
 		}
 	}
-	change(doc: NotebookDoc, task?: NewTask) {
+	change(doc: NotebookDoc, task?: NewTask, goal?: {id:string;title:string}) {
+		if (goal) this.pendingGoals.set(goal.id,goal);
 		if (task) {
 			this.pending.set(task.id, task);
 			this.optimisticTitles.set(task.id, task.title);
@@ -159,7 +164,7 @@ export class DayBuffer {
 		}
 		this.publish({ page, status: "Saving" });
 		clearTimeout(this.timer);
-		if (task) void this.flush();
+		if (task || goal) void this.flush();
 		else this.timer = setTimeout(() => void this.flush(), 350);
 	}
 	async flush() {
@@ -195,6 +200,8 @@ export class DayBuffer {
 				this.retryBody = undefined;
 				this.dirty = this.state.page.doc !== body.doc;
 				for (const t of body.newTasks) this.pending.delete(t.id);
+				for (const goal of body.newGoals ?? []) this.pendingGoals.delete(goal.id);
+				if(body.newGoals?.length) void queryClient.invalidateQueries({queryKey:["planner","reports","planner-goals"]});
 				this.publish({
 					page: { ...this.state.page, revision: this.revision },
 					status: this.dirty ? "Saving" : "Saved",

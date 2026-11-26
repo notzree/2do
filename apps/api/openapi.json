@@ -422,6 +422,9 @@
               "type": "string",
               "format": "uuid"
             },
+            "extracting": {
+              "type": "boolean"
+            },
             "classification": {
               "type": "string",
               "enum": [
@@ -740,7 +743,8 @@
                           "type": "string",
                           "enum": [
                             "taskRef",
-                            "graphRef"
+                            "graphRef",
+                            "goalRef"
                           ]
                         },
                         "attrs": {
@@ -910,7 +914,8 @@
                           "type": "string",
                           "enum": [
                             "taskRef",
-                            "graphRef"
+                            "graphRef",
+                            "goalRef"
                           ]
                         },
                         "attrs": {
@@ -999,6 +1004,10 @@
                   "pattern": "\\S",
                   "description": "Verbatim task body after the slash command."
                 },
+                "alias": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                },
                 "typeId": {
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$",
@@ -1013,6 +1022,29 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 100
+                }
+              },
+              "required": [
+                "id",
+                "title"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 500
+          },
+          "newGoals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
                 }
               },
               "required": [
@@ -1116,9 +1148,86 @@
                   "type": "string",
                   "format": "uuid"
                 },
+                "createdDate": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Local creation date, when known."
+                },
+                "currentDay": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date",
+                  "description": "Current planner day; null for an unassigned task."
+                },
+                "carriedFrom": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "description": "Previous planner days, one per carryover."
+                },
+                "siblingOrder": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "revision": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "due": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "day"
+                          ]
+                        },
+                        "date": {
+                          "type": "string",
+                          "format": "date"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "date"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "time"
+                          ]
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "timeZone": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "at",
+                        "timeZone"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "parentId": {
                   "type": [
@@ -1155,6 +1264,10 @@
                           ]
                         },
                         "date": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "endDateExclusive": {
                           "type": "string",
                           "format": "date"
                         }
@@ -1322,9 +1435,86 @@
                   "type": "string",
                   "format": "uuid"
                 },
+                "createdDate": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Local creation date, when known."
+                },
+                "currentDay": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date",
+                  "description": "Current planner day; null for an unassigned task."
+                },
+                "carriedFrom": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "description": "Previous planner days, one per carryover."
+                },
+                "siblingOrder": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "revision": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "due": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "day"
+                          ]
+                        },
+                        "date": {
+                          "type": "string",
+                          "format": "date"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "date"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "time"
+                          ]
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "timeZone": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "at",
+                        "timeZone"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "parentId": {
                   "type": [
@@ -1361,6 +1551,10 @@
                           ]
                         },
                         "date": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "endDateExclusive": {
                           "type": "string",
                           "format": "date"
                         }
@@ -1486,9 +1680,86 @@
             "type": "string",
             "format": "uuid"
           },
+          "createdDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Local creation date, when known."
+          },
+          "currentDay": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Current planner day; null for an unassigned task."
+          },
+          "carriedFrom": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Previous planner days, one per carryover."
+          },
+          "siblingOrder": {
+            "type": "integer",
+            "minimum": 0
+          },
           "revision": {
             "type": "integer",
             "minimum": 0
+          },
+          "due": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "day"
+                    ]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "type",
+                  "date"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "time"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "type",
+                  "at",
+                  "timeZone"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "parentId": {
             "type": [
@@ -1525,6 +1796,10 @@
                     ]
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDateExclusive": {
                     "type": "string",
                     "format": "date"
                   }
@@ -1615,6 +1890,58 @@
       "CreateTask": {
         "type": "object",
         "properties": {
+          "due": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "day"
+                    ]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "type",
+                  "date"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "time"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "type",
+                  "at",
+                  "timeZone"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parentId": {
             "type": [
               "string",
@@ -1653,6 +1980,10 @@
                     ]
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDateExclusive": {
                     "type": "string",
                     "format": "date"
                   }
@@ -1717,7 +2048,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "description": "An all-day date or a half-open interval with end later than start."
           },
           "durationMinutes": {
@@ -1726,8 +2056,7 @@
               "null"
             ],
             "exclusiveMinimum": 0,
-            "maximum": 525600,
-            "default": null
+            "maximum": 525600
           },
           "id": {
             "type": "string",
@@ -1754,6 +2083,26 @@
               "anchor"
             ],
             "additionalProperties": false
+          },
+          "titleContext": {
+            "type": "object",
+            "properties": {
+              "timeZone": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "defaultDate": {
+                "type": "string",
+                "format": "date"
+              },
+              "referenceDate": {
+                "type": "string",
+                "format": "date"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Calendar context for dates and times in the title."
           }
         },
         "required": [
@@ -1764,6 +2113,58 @@
       "PatchTask": {
         "type": "object",
         "properties": {
+          "due": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "day"
+                    ]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "type",
+                  "date"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "time"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "type",
+                  "at",
+                  "timeZone"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parentId": {
             "type": [
               "string",
@@ -1799,6 +2200,10 @@
                     ]
                   },
                   "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDateExclusive": {
                     "type": "string",
                     "format": "date"
                   }
@@ -1895,9 +2300,86 @@
                 "type": "string",
                 "format": "uuid"
               },
+              "createdDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Local creation date, when known."
+              },
+              "currentDay": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date",
+                "description": "Current planner day; null for an unassigned task."
+              },
+              "carriedFrom": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "description": "Previous planner days, one per carryover."
+              },
+              "siblingOrder": {
+                "type": "integer",
+                "minimum": 0
+              },
               "revision": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "due": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "day"
+                        ]
+                      },
+                      "date": {
+                        "type": "string",
+                        "format": "date"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "date"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "time"
+                        ]
+                      },
+                      "at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "at",
+                      "timeZone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "parentId": {
                 "type": [
@@ -1934,6 +2416,10 @@
                         ]
                       },
                       "date": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "endDateExclusive": {
                         "type": "string",
                         "format": "date"
                       }
@@ -2130,6 +2616,43 @@
                                 "kind": {
                                   "type": "string",
                                   "enum": [
+                                    "choice"
+                                  ]
+                                },
+                                "options": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "minItems": 1
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind",
+                                "options"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
                                     "date"
                                   ]
                                 }
@@ -2272,6 +2795,9 @@
               ],
               "additionalProperties": false
             }
+          },
+          "extracting": {
+            "type": "boolean"
           },
           "classification": {
             "type": "string",
@@ -2436,6 +2962,133 @@
                 "additionalProperties": false
               }
             },
+            "goalSubtypes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "version": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "number"
+                              ]
+                            },
+                            "min": {
+                              "type": "number"
+                            },
+                            "integer": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "kind",
+                            "min"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "choice"
+                              ]
+                            },
+                            "options": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "minItems": 1
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "kind",
+                            "options"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "month"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "version",
+                  "fields"
+                ],
+                "additionalProperties": false
+              }
+            },
             "facts": {
               "type": "array",
               "items": {
@@ -2550,6 +3203,19 @@
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9-]{0,63}$"
                   },
+                  "captureAliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                    }
+                  },
+                  "captureTiming": {
+                    "type": "string",
+                    "enum": [
+                      "deadline"
+                    ]
+                  },
                   "schemaVersion": {
                     "type": "integer",
                     "exclusiveMinimum": 0
@@ -2590,6 +3256,43 @@
                           "type": "array",
                           "items": {
                             "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "choice"
+                                    ]
+                                  },
+                                  "options": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "minItems": 1
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "kind",
+                                  "options"
+                                ],
+                                "additionalProperties": false
+                              },
                               {
                                 "type": "object",
                                 "properties": {
@@ -2740,6 +3443,76 @@
                           "type": "array",
                           "items": {
                             "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "inlayLabel": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text"
+                                    ]
+                                  },
+                                  "maxLength": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "kind",
+                                  "maxLength"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "inlayLabel": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "choice"
+                                    ]
+                                  },
+                                  "options": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "minItems": 1
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "kind",
+                                  "options"
+                                ],
+                                "additionalProperties": false
+                              },
                               {
                                 "type": "object",
                                 "properties": {
@@ -2930,6 +3703,133 @@
               "additionalProperties": false
             }
           },
+          "goalSubtypes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "number"
+                            ]
+                          },
+                          "min": {
+                            "type": "number"
+                          },
+                          "integer": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "kind",
+                          "min"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "choice"
+                            ]
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "minItems": 1
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "kind",
+                          "options"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "month"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "version",
+                "fields"
+              ],
+              "additionalProperties": false
+            }
+          },
           "facts": {
             "type": "array",
             "items": {
@@ -3044,6 +3944,19 @@
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9-]{0,63}$"
                 },
+                "captureAliases": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                  }
+                },
+                "captureTiming": {
+                  "type": "string",
+                  "enum": [
+                    "deadline"
+                  ]
+                },
                 "schemaVersion": {
                   "type": "integer",
                   "exclusiveMinimum": 0
@@ -3084,6 +3997,43 @@
                         "type": "array",
                         "items": {
                           "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "choice"
+                                  ]
+                                },
+                                "options": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "minItems": 1
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind",
+                                "options"
+                              ],
+                              "additionalProperties": false
+                            },
                             {
                               "type": "object",
                               "properties": {
@@ -3234,6 +4184,76 @@
                         "type": "array",
                         "items": {
                           "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "inlayLabel": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "text"
+                                  ]
+                                },
+                                "maxLength": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind",
+                                "maxLength"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "inlayLabel": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "choice"
+                                  ]
+                                },
+                                "options": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "minItems": 1
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "kind",
+                                "options"
+                              ],
+                              "additionalProperties": false
+                            },
                             {
                               "type": "object",
                               "properties": {
@@ -5239,6 +6259,1431 @@
         }
       }
     },
+    "/api/days/{date}/carryover": {
+      "post": {
+        "operationId": "carryOverTasks",
+        "summary": "Move unfinished tasks from the previous calendar day",
+        "x-mcp": true,
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "date",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "timeZone",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "to": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "moved": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "moved"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/carryover": {
+      "get": {
+        "operationId": "readCarryoverSettings",
+        "summary": "Read automatic carryover settings",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "timeZone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "timeZone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setCarryoverSettings",
+        "summary": "Configure daily carryover at 6 AM in the selected time zone",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "timeZone"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "timeZone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "timeZone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planner-goals": {
+      "get": {
+        "operationId": "listPlannerGoals",
+        "x-mcp": true,
+        "summary": "Read planner goals, linked tasks, check-ins and plugin progress",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "targetDate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date"
+                      },
+                      "nextCheckIn": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date"
+                      },
+                      "manualAchievement": {
+                        "type": "boolean"
+                      },
+                      "subtype": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "typeId": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                          },
+                          "version": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "data": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "typeId",
+                          "version",
+                          "data"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "timeZone": {
+                        "type": "string"
+                      },
+                      "dailyMetric": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "revision": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "achieved": {
+                        "type": "boolean"
+                      },
+                      "progress": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "satisfied": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "satisfied"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "links": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "taskId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "completed": {
+                              "type": "boolean"
+                            },
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "contributes",
+                                "satisfies"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "taskId",
+                            "title",
+                            "completed",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "checkIns": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "note": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "note"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "targetDate",
+                      "nextCheckIn",
+                      "manualAchievement",
+                      "subtype",
+                      "timeZone",
+                      "dailyMetric",
+                      "id",
+                      "revision",
+                      "achieved",
+                      "progress",
+                      "links",
+                      "checkIns"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPlannerGoal",
+        "x-mcp": true,
+        "summary": "Create a personal goal with optional dates and plugin criteria",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "targetDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  },
+                  "nextCheckIn": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  },
+                  "subtype": {
+                    "type": "object",
+                    "properties": {
+                      "typeId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                      },
+                      "version": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "data": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "typeId",
+                      "version",
+                      "data"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    },
+                    "targetDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date"
+                    },
+                    "nextCheckIn": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date"
+                    },
+                    "manualAchievement": {
+                      "type": "boolean"
+                    },
+                    "subtype": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "typeId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "typeId",
+                        "version",
+                        "data"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "timeZone": {
+                      "type": "string"
+                    },
+                    "dailyMetric": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "revision": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "achieved": {
+                      "type": "boolean"
+                    },
+                    "progress": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "satisfied": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "satisfied"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "taskId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "completed": {
+                            "type": "boolean"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "contributes",
+                              "satisfies"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "taskId",
+                          "title",
+                          "completed",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "checkIns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "targetDate",
+                    "nextCheckIn",
+                    "manualAchievement",
+                    "subtype",
+                    "timeZone",
+                    "dailyMetric",
+                    "id",
+                    "revision",
+                    "achieved",
+                    "progress",
+                    "links",
+                    "checkIns"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planner-goals/{id}/progress": {
+      "get": {
+        "operationId": "readGoalProgress",
+        "x-mcp": true,
+        "summary": "Evaluate the current goal rule against recorded evidence through the selected civil day",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "required": true,
+            "name": "day",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "satisfied": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "satisfied"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planner-goals/{id}": {
+      "patch": {
+        "operationId": "editPlannerGoal",
+        "x-mcp": true,
+        "summary": "Edit a goal, record a check-in, or change a task contribution or completion link",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "change": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "edit"
+                            ]
+                          },
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "targetDate": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date"
+                          },
+                          "nextCheckIn": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date"
+                          },
+                          "subtype": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "typeId": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "data": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "typeId",
+                              "version",
+                              "data"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "title",
+                          "targetDate",
+                          "nextCheckIn"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "achievement"
+                            ]
+                          },
+                          "achieved": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "achieved"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "link"
+                            ]
+                          },
+                          "taskId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "role": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "enum": [
+                              "contributes",
+                              "satisfies",
+                              null
+                            ]
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "taskId",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "check-in"
+                            ]
+                          },
+                          "note": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2000
+                          },
+                          "nextCheckIn": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "note",
+                          "nextCheckIn"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "subtype"
+                            ]
+                          },
+                          "subtype": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "typeId": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "data": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "typeId",
+                              "version",
+                              "data"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "subtype"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "revision",
+                  "change"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    },
+                    "targetDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date"
+                    },
+                    "nextCheckIn": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date"
+                    },
+                    "manualAchievement": {
+                      "type": "boolean"
+                    },
+                    "subtype": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "typeId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "typeId",
+                        "version",
+                        "data"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "timeZone": {
+                      "type": "string"
+                    },
+                    "dailyMetric": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "revision": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "achieved": {
+                      "type": "boolean"
+                    },
+                    "progress": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "satisfied": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "satisfied"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "taskId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "completed": {
+                            "type": "boolean"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "contributes",
+                              "satisfies"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "taskId",
+                          "title",
+                          "completed",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "checkIns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "targetDate",
+                    "nextCheckIn",
+                    "manualAchievement",
+                    "subtype",
+                    "timeZone",
+                    "dailyMetric",
+                    "id",
+                    "revision",
+                    "achieved",
+                    "progress",
+                    "links",
+                    "checkIns"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/review": {
       "get": {
         "operationId": "listReview",
@@ -7174,6 +9619,62 @@
         }
       }
     },
+    "/api/plan/revision": {
+      "get": {
+        "operationId": "planRevision",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "revision"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tasks": {
       "get": {
         "operationId": "listTasks",
@@ -8286,6 +10787,677 @@
           },
           "409": {
             "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/{kind}": {
+      "get": {
+        "operationId": "connectionStatus",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "google-calendar"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "account": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "directions": {
+                      "type": "object",
+                      "properties": {
+                        "importEvents": {
+                          "type": "boolean"
+                        },
+                        "exportEvents": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "importEvents",
+                        "exportEvents"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "lastSync": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "configured",
+                    "account",
+                    "directions",
+                    "lastSync",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "disconnectProvider",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "google-calendar"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Disconnected"
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/{kind}/authorize": {
+      "post": {
+        "operationId": "authorizeConnection",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "google-calendar"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "importEvents": {
+                    "type": "boolean"
+                  },
+                  "exportEvents": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "importEvents",
+                  "exportEvents"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/{kind}/callback": {
+      "get": {
+        "operationId": "completeConnection",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "google-calendar"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "code",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "error",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Return to Connections settings"
+          },
+          "400": {
+            "description": "Invalid or declined consent"
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/google-calendar/options": {
+      "put": {
+        "operationId": "calendarSyncDirections",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "importEvents": {
+                    "type": "boolean"
+                  },
+                  "exportEvents": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "importEvents",
+                  "exportEvents"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authorized": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "authorized"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{id}/calendar-link": {
+      "put": {
+        "operationId": "setCalendarLink",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unlinked",
+                        "imported",
+                        "linked",
+                        "conflict"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePublishedEvent",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "revision",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "queued": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "queued"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision, graph or ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied X-Planner-Scope belongs to another planner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getCalendarLink",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unlinked",
+                        "imported",
+                        "linked",
+                        "conflict"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cloudflare Access authentication required",
             "content": {
               "application/json": {
                 "schema": {

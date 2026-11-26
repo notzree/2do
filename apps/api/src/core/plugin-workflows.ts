@@ -28,10 +28,16 @@ function canonical(value: unknown): string {
       : v,
   );
 }
-function upgraded(data: PluginData, from: number, to: number, steps: Definition["migrations"]) {
+function upgraded(
+  data: PluginData,
+  from: number,
+  to: number,
+  steps: Definition["migrations"],
+  titles: readonly string[] = [],
+) {
   for (let version = from; version < to; version++) {
     if (!steps?.[version]) throw new Error("Missing plugin migration from version " + version);
-    data = steps[version](data);
+    data = steps[version](data, titles);
   }
   return data;
 }
@@ -126,6 +132,10 @@ export class PluginWorkflows {
     const state = flow.schema.parse(row?.document ?? flow.initial);
     const next = flow.transition(previous, current, state, event);
     const document = flow.schema.parse(next.state);
+    if (event.kind === "command" && next.confirmSubtype) {
+      const confirmed = this.subtypes.confirmAutomatic(id, definition.id, current.revision);
+      if (confirmed) current = { ...current, revision: confirmed.revision };
+    }
     const dataChanged = previous?.revision !== current.revision;
     const pendingInputChanged =
       previous?.task.revision !== current.task.revision && !!this.db.job(id, definition.id);
@@ -336,7 +346,17 @@ export class PluginWorkflows {
             row.document === null
               ? null
               : d.schema.parse(
-                  upgraded(row.document, row.schemaVersion, d.schemaVersion, d.migrations),
+                  upgraded(
+                    row.document,
+                    row.schemaVersion,
+                    d.schemaVersion,
+                    d.migrations,
+                    [
+                      this.subtypes.originalCapture(row.taskId),
+                      row.classifiedTitle,
+                      this.planner.task(row.taskId)?.title,
+                    ].filter((title): title is string => !!title),
+                  ),
                 );
           this.subtypes.putSubtype(
             row.taskId,

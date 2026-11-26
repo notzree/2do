@@ -1,3 +1,4 @@
+import { EventCalendarLink } from "./connections.tsx";
 import { useInspectorPrompts } from "./task-summary-api.ts";
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import type { Mutate } from "./use-plan.ts";
 import { api } from "./query.ts";
 import { InspectorPrompt, SkippedHints } from "./task-hints.tsx";
 import { ProposeTime } from "./review-inbox.tsx";
+import { TaskGoalLinks } from "./planner-goals.tsx";
 import { TaskSubtypes } from "./task-subtypes.tsx";
 import { taskForm, prepareTaskEdit, type TaskForm } from "./task-edits.ts";
 import "./task-inspector.css";
@@ -85,6 +87,13 @@ function TaskEditor({
             />
           </label>
         </div>
+        <label>
+          Due date
+          <input type="date" value={form.dueDay} onChange={e=>edit("dueDay",e.target.value)}/>
+        </label>
+        <label>Due time (optional)
+          <input type="time" disabled={!form.dueDay} value={form.dueTime} onChange={e=>edit("dueTime",e.target.value)}/>
+        </label>
         <label>
           Schedule
           <select value={type} onChange={(e) => edit("type", e.target.value as typeof type)}>
@@ -305,7 +314,9 @@ export function TaskInspector({
         )}
         {graph && <DependencyGraph plan={plan} task={task} select={select} />}
         <div hidden={graph}>
+          {task.kind === "event" && <EventCalendarLink key={task.id} id={task.id} revision={task.revision} scheduled={task.schedule?.type === "day" || task.schedule?.type === "fixed"} />}
           <OriginalInput id={task.id} />
+          <TaskGoalLinks taskId={task.id}/>
           <TaskSubtypes
             task={task}
             active={!graph}
@@ -339,15 +350,11 @@ export function TaskInspector({
                   await mutate.createTask({
                     title: sub,
                     parentId: task.id,
-                    schedule: task.schedule
-                      ? {
-                          type: "day",
-                          date:
-                            task.schedule.type === "day"
-                              ? task.schedule.date
-                              : dayKey(new Date(task.schedule.start)),
-                        }
-                      : null,
+                    titleContext: {
+                      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                      defaultDate: task.schedule?.type === "day" ? task.schedule.date
+                        : task.schedule ? dayKey(new Date(task.schedule.start)) : undefined,
+                    },
                   })
                 )
                   setSub("");

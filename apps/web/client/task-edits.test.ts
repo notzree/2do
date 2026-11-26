@@ -14,6 +14,7 @@ const base = task.parse({
 	}),
 	id: crypto.randomUUID(),
 	revision: 3,
+	durationMinutes: null,
 });
 const renamed = { ...taskForm(base, day), title: "Call Sam about repairs" };
 

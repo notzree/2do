@@ -21,7 +21,7 @@ const definition: TaskSubtypeDefinition<z.infer<typeof data>, null> = {
 	schemaVersion: 1,
 	schema: data,
 	initialData: {},
-	classification: { instructions: "Is it reading?", threshold: 0.85 },
+	classification: { instructions: "Is it reading?" },
 	editor: [{ fields: [topics.field] }, { key: "target", fields: [pages.field] }],
 	prompts: [{ id: "pages", trigger: "task.open", label: "Pages?", field: "target.pages" }],
 	view: () => null,
@@ -42,7 +42,7 @@ it("uses the same primitive limits for input validation and displayed fields", (
 	expect(describeSubtype(definition)).not.toHaveProperty("view");
 });
 
-it("rejects undeclared paths, duplicate fields or prompts, incompatible types and malformed classifier thresholds", () => {
+it("rejects undeclared paths, duplicate fields or prompts, incompatible types and empty classification instructions", () => {
 	const fields = (list: typeof definition.editor) =>
 		validateSubtypeDefinition({ ...definition, editor: list });
 	expect(() => fields([{ key: "target", fields: [topics.field] }])).toThrow(/target.topics/);
@@ -61,7 +61,7 @@ it("rejects undeclared paths, duplicate fields or prompts, incompatible types an
 	expect(() =>
 		validateSubtypeDefinition({
 			...definition,
-			classification: { instructions: "Match", threshold: 1.01 },
+			classification: { instructions: "" },
 		}),
 	).toThrow();
 	expect(() =>
@@ -71,6 +71,8 @@ it("rejects undeclared paths, duplicate fields or prompts, incompatible types an
 			initialData: {},
 			view: () => null,
 			workflow: undefined,
+			fromTitle: undefined,
+			captureAliases: undefined,
 		}),
 	).toThrow(/text-list editor field/);
 });
@@ -99,7 +101,7 @@ it("serves a disabled plugin's public capabilities before it is enabled", async 
 						expect.objectContaining({ kind: "image", key: "photo" }),
 					] }),
 				]),
-				classification: { threshold: 0.85, instructions: expect.any(String) },
+				classification: { threshold: 0.5, instructions: expect.any(String) },
 			},
 		],
 	});

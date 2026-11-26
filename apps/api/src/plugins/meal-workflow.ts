@@ -147,6 +147,7 @@ export const mealWorkflow: PluginWorkflow<
           ([k, v]) => state.proposal?.[k as keyof typeof nutrients] === v,
         );
       return {
+        confirmSubtype: true,
         state: {
           logged: true,
           day: z.iso.date().parse(day),

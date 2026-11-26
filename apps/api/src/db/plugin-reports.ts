@@ -1,3 +1,5 @@
+import { GoalDatabase } from "./goals.ts";
+import { PlannerError } from "../core/planner.ts";
 import { and, eq, gte, lt, or, sql } from "drizzle-orm";
 import {
   goal,
@@ -109,6 +111,10 @@ export class SqlitePluginReportDatabase {
   }
 
   createGoal(document: Goal, creation: string) {
+    const core = new GoalDatabase(this.store);
+    if (core.row(document.id)) throw new PlannerError(409, "This goal ID is already in use.");
+    core.insert(document.id, creation, { title: document.label, manualAchievement: false, dailyMetric: document.metric.id,
+      timeZone: document.timeZone, nextCheckIn: null, targetDate: null, subtype: null });
     this.store.insert(reportGoals).values({ id: document.id, document, creation }).run();
   }
 

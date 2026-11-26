@@ -1,6 +1,6 @@
 # Authoring a 2do task plugin
 
-Start here when adding a built-in plugin to the planner. The smallest change is one module in this directory and one registration in `UserPlanner`. Nutrition is the shipped example. Its subtype attaches to a normal task and can coexist with other subtypes on the same task. [Meal implementation](./meal.ts) · [Runtime registration](../user-planner.ts)
+Start here when adding a built-in plugin to the planner. The smallest change is one module in this directory and one registration in `UserPlanner`. Nutrition, Fitness, Budgeting, and Productivity are registered built-ins. Nutrition is the reference for meal logging. Its subtype attaches to a normal task and can coexist with other subtypes on the same task. [Meal implementation](./meal.ts) · [Runtime registration](../user-planner.ts)
 
 For the design and acceptance scenarios behind stateful plugins, see the [implementation plan](../../../../docs/plugin-workflows.md). The [meal workflow](./meal-workflow.ts) is the working reference for guarded commands, async effects and daily metrics.
 
@@ -10,12 +10,12 @@ For the design and acceptance scenarios behind stateful plugins, see the [implem
 | --- | --- |
 | `TaskPlugin` | Groups a stable plugin ID, label, description, subtype definitions and optional metrics, facts or features. The compiled registry determines availability. Each user enables plugins in their own planner. |
 | `TaskSubtypeDefinition<Data, View>` | The author supplies the subtype ID, label, version, Zod schema, valid initial data, classification rule and typed `view(task, data)`. Editor groups, prompts, icon, capture command, migrations and a workflow are optional. Put meaning here, including units, domain validation and pure calculations. |
-| `PluginWorkflow.describe() / transition() / measure()` | Advertise currently available commands, decide the next private state, and project observations. The host validates commands, commits state, leases effects, and replaces metric observations in the caller's planner. |
+| `PluginWorkflow.describe() / transition() / measure()` | Advertise currently available commands, decide the next private state, and project observations. The host validates commands, commits state, leases effects, and replaces metric observations in the caller's planner. A user command that confirms a log can return `confirmSubtype: true` in its transition. This retains the attachment through renames and reclassification. |
 | `MetricDefinition` and `PluginReports` | The plugin declares metric ID, version, label, unit and reducer. Core provides day/week/month buckets and effective-dated daily goal history. A second plugin publishing a metric appears in the same reports and goal editor. |
 | `asTaskSubtype(details, definition)` | The typed read path. Checks ID, non-null data, exact schema version and successful parse before calling `view`. The view is computed in memory and has no persistence callback. |
 | `TaskPlugins.installations() / setEnabled() / enabledTypes()` | Publish client-safe descriptors, change one planner's installation, and provide current definitions and installation epochs for background work. |
 | `TaskPlugins.details() / write() / attachAtCapture()` | Read visible records, attach/replace/reject one subtype with revision checking, or attach its initial data in the notebook save. `store()` is a lower-level validated upsert. Its caller owns the concurrency checks. Use `write()` for user edits. |
-| `TaskClassification.enqueue() / request() / processDue()` | Schedule work on create/rename, request a manual recheck, and claim and settle eligible work. The injected `TaskClassifier.classify(inputs, signal)` returns scores by task and subtype. Core applies the plugin's threshold. |
+| `TaskClassification.enqueue() / request() / processDue()` | Schedule work on create/rename, request a manual recheck, and claim and settle eligible work. The injected `TaskClassifier.classify(inputs, signal)` returns scores by task and subtype. Core selects the highest score strictly above 0.5 across all eligible plugins. Registration order breaks ties. |
 | `eligibleTaskPrompts() / TaskSummaries.read() / setSkipped()` | Compute hints from current task and subtype data, batch row chips/inlays/hints, and save skip/restore preferences. A prompt trigger describes the task's current completion flag. No callback runs when a hint appears. |
 | `PluginFact / PluginFeature / PluginFactAccess` | Describe a versioned fact, a contextual action that consumes it, and the host's grants/readers. `featureActions()` discovers authorized actions. `runFeature()` reads, checks authorization again and filters by scope. Production registers Nutrition with no fact-access adapter or feature route. Test fixtures exercise this seam. |
 
@@ -24,10 +24,12 @@ The Zod wire types and author interfaces live in [interfaces/task-plugins.ts](..
 ## Add a subtype
 
 1. Choose stable IDs. A plugin ID starts with a lowercase letter and uses lowercase letters, digits and hyphens, up to 64 characters. A subtype ID has exactly two such segments, `plugin-id.local-id`. Keep persisted subtype IDs and prompt IDs stable across label changes.
-2. Write a strict schema and an initial value that parses. An automatic match writes that initial value. Make fields the user will answer later optional. Use `numberField()` or `textListField()` to derive the schema and editor descriptor together. Add optionality and domain refinements to the returned schema. Registration checks the field paths, field kinds, prompt references and classifier threshold. [Field builders](../interfaces/plugin-fields.ts) The two built-in field kinds are `number` and `text-list`. Editor groups support one level of nesting.
-3. Declare the matching question and a probability threshold. Give examples on both sides of a plausible ambiguity. Set the prompt trigger to `task.open` for an incomplete task or `task.completed` for a completed one. Its `field` must match an editor path, such as `pagesRead` or `target.topics`. Choose `inlayLabel` when a saved value belongs on the notebook row.
+2. Write a strict schema and an initial value that parses. An automatic match writes that initial value. Make fields the user will answer later optional. Use `numberField()` or `textListField()` to derive the schema and editor descriptor together. Add optionality and domain refinements to the returned schema. Registration checks the field paths, field kinds, prompt references and matching question. [Field builders](../interfaces/plugin-fields.ts) Supported field kinds are `number`, `text`, `text-list`, and `choice`. Editor groups support one level of nesting.
+3. Declare the matching question. Give examples on both sides of a plausible ambiguity. Set the prompt trigger to `task.open` for an incomplete task or `task.completed` for a completed one. Its `field` must match an editor path, such as `pagesRead` or `target.topics`. Choose `inlayLabel` when a saved value belongs on the notebook row.
 4. Export the plugin and add it to the array passed to `new TaskPlugins(...)` in [user-planner.ts](../user-planner.ts). The settings list, inspector and slash catalog consume descriptors from the server. If enabled plugins share a shortcut or collide with a built-in, the client uses the qualified subtype ID. [Command resolution](../../../web/client/commands.ts)
 5. Exercise it through the normal write and read paths below. A new plugin that fits the existing descriptor needs no new route, table, React switch or MCP tool. A new **field kind** changes the shared contract, field codec, renderer, inlay formatting and their tests. [Field codec](../../../web/client/subtype-fields.ts) · [Contract generation](../../../../scripts/openapi.mjs)
+
+A subtype can opt editor fields into a second pass over the original title. Declare `extraction` as a map from editor field path to extraction instructions. For example, a reading plugin could request `{ pagesRead: "Number of pages explicitly read, excluding chapter numbers." }`. The host derives the number or text-list type from the editor, fills missing values, validates the complete subtype, and preserves its attachment source. Use the separate workflow for estimates and confirmed observations.
 
 ### Example module
 
@@ -52,7 +54,6 @@ export const readingSession: TaskSubtypeDefinition<z.infer<typeof readingData>, 
   initialData: {},
   classification: {
     instructions: "Is the user planning or logging a reading session? Include reading a chapter. Exclude buying, borrowing or returning a book.",
-    threshold: 0.9,
   },
   editor: [{ fields: [pages.field] }],
   prompts: [
@@ -71,7 +72,7 @@ export const readingPlugin: TaskPlugin = {
 
 ### Trace one write
 
-1. Enable Reading under **Settings → Plugins** or send `PUT /api/task-plugins/reading` with `{"enabled":true}`. Capture `/read Chapter 2`. The notebook saves the task, reference and manual subtype together. Ordinary `/task Read chapter 2` can reach the same subtype via Clef if configured. Each eligible subtype gets its own decision.
+1. Enable Reading under **Settings → Plugins** or send `PUT /api/task-plugins/reading` with `{"enabled":true}`. Capture `/read Chapter 2`. The notebook saves the task, reference and manual subtype together. Ordinary `/task Read chapter 2` can reach the same subtype via Clef if configured. For both captures, Clef scores every subtype from every enabled plugin. Core ranks compatible, non-rejected types and preserves manual records.
 2. Complete the task, then read `GET /api/tasks/{id}/details`. The active record contains `typeId`, `schemaVersion`, `source`, a UUID `revision` and `data`. If completion happened before the match arrived, the missing-pages hint still appears on the next summary read.
 3. Send `PUT /api/tasks/{id}/subtypes/reading.session` with `{"revision":"<subtype UUID from details>","data":{"pagesRead":12}}`. This replaces the entire payload and marks it manual. Preserve other fields when editing one field. The returned record has a fresh revision. A stale revision gets HTTP 409. Reload before reconciling the edit.
 4. Read the summary with `POST /api/tasks/summaries` and `{"ids":["<task UUID>"]}`. Expect the Reading chip, Pages inlay and no missing-pages hint. Saving zero also answers the prompt. Skipping an eligible hint persists a preference for this task and prompt ID. It leaves the data untouched.
@@ -110,4 +111,11 @@ npm test -w @2do/api -- --run test/task-plugins.test.ts test/plugin-capabilities
 npm test -w @2do/web -- --run client/task-subtypes.test.tsx client/subtype-fields.test.ts client/commands.test.ts client/plugin-settings.test.tsx
 ```
 
-If the HTTP contract changes, update the shared schemas and Hono route metadata, run `npm run openapi`, then `npm run openapi:check`. The generator writes the OpenAPI JSON, web client declarations and opted-in MCP catalog together. Plugin labels, classification instructions and thresholds are authored domain decisions.
+If the HTTP contract changes, update the shared schemas and Hono route metadata, run `npm run openapi`, then `npm run openapi:check`. The generator writes the OpenAPI JSON, web client declarations and opted-in MCP catalog together. Plugin labels and classification instructions are authored domain decisions.
+
+
+## Goal subtypes
+
+A plugin can register several `goalSubtypes` alongside its task subtypes. Give each rule a namespaced ID, label, version, editable fields, and the IDs of its own confirmed metrics. Implement `period(config, day)` to select a half-open range of civil days (or all records) and `evaluate(config, observations, day)` to return progress text and whether the evidence satisfies the goal. Keep recurring period progress separate from one-time goal achievement. Fitness evaluates distance and elapsed minutes on the same recorded run. Budgeting sums one currency for one calendar month. See [goal interfaces](../interfaces/goals.ts) and [Fitness](./fitness.ts).
+
+Core owns date fields, check-ins and the many-to-many task links. A completed “satisfies” link can achieve a goal; a contribution remains evidence. Disabled plugins suspend their rule evaluation. Core goal data and manual completion stay accessible. `/api/planner-goals` exposes these records. Existing daily metric targets retain their IDs and effective-dated reporting API.

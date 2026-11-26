@@ -6,11 +6,48 @@
 	"vars": {
 		"ACCESS_ISSUER": "",
 		"ACCESS_AUD": "",
-		"LOCAL_PLANNER": "disabled"
+		"LOCAL_PLANNER": "disabled",
+		"GOOGLE_CLIENT_ID": "test-client",
+		"GOOGLE_CLIENT_SECRET": "test-client-secret",
+		"GOOGLE_CONNECTOR_ORIGIN": "https://twodo.example",
+		"GOOGLE_TOKEN_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		"GMAIL_PUBSUB_TOPIC": "projects/test/topics/gmail",
+		"GMAIL_PUSH_SERVICE_ACCOUNT": "push@test.example",
+		"GMAIL_PUSH_SUBSCRIPTION": "projects/test/subscriptions/2do"
 	},
-	"r2_buckets": [{ "binding": "NOTEBOOK_IMAGES", "bucket_name": "2do-notebook-images" }],
+	"r2_buckets": [
+		{
+			"binding": "NOTEBOOK_IMAGES",
+			"bucket_name": "2do-notebook-images"
+		}
+	],
 	"durable_objects": {
-		"bindings": [{ "name": "USER_PLANNER", "class_name": "UserPlanner" }]
+		"bindings": [
+			{
+				"name": "USER_PLANNER",
+				"class_name": "UserPlanner"
+			},
+			{
+				"name": "GOOGLE_CONNECTION",
+				"class_name": "GoogleConnection"
+			},
+			{
+				"name": "GMAIL_DIRECTORY",
+				"class_name": "GmailDirectory"
+			}
+		]
 	},
-	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserPlanner"] }]
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"UserPlanner",
+				"GoogleConnection",
+				"GmailDirectory"
+			]
+		}
+	],
+	"compatibility_flags": [
+		"nodejs_compat"
+	]
 }

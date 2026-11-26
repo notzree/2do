@@ -36,10 +36,12 @@ export const mealType: TaskSubtypeDefinition<z.infer<typeof mealData>, Meal> = {
 		},
 	],
 	workflow: mealWorkflow,
+	extraction: {
+		foods: "Foods or dishes the user plans to eat or ate. Return the food names exactly as written. If no foods are named, return an empty list. Exclude meal names, people, places, and times.",
+	},
 	classification: {
 		instructions:
-			"Does the task describe the user having a meal? Count planned or past meals. Calendar shorthand counts: brunch, dinner with friends, meeting for noodles, grabbing a bite, or curry night. Exclude errands such as reserving a table, buying ingredients, delivering food to someone else, or picking someone up after dinner.",
-		threshold: 0.85,
+			"Does the task describe the user having a meal? Count planned or past meals. Calendar shorthand counts: brunch, dinner with friends, meeting for noodles, grabbing a bite, or curry night. Classify the main action. A payment or receipt mentioning lunch describes spending. Exclude those transactions and errands such as reserving a table, buying ingredients, delivering food to someone else, or picking someone up after dinner.",
 	},
 	view: (task, data) => ({
 		taskId: task.id,

@@ -19,7 +19,7 @@ function summaryQuery(ids: string[]) {
         ).data,
       ),
     refetchInterval: (q) =>
-      q.state.data?.some((s) => s.classification === "pending") ? 1500 : false,
+      q.state.data?.some((s) => s.extracting || s.classification === "pending") ? 1500 : false,
   });
 }
 

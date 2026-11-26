@@ -1,3 +1,5 @@
+export const classificationThreshold = 0.5;
+
 export interface ClassificationCandidate {
 	typeId: string;
 	instructions: string;

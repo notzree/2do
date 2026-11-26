@@ -1,3 +1,4 @@
+import { goalType, type GoalSubtypeDefinition } from "../interfaces/goals.ts";
 import type { SqliteTaskPluginDatabase } from "../db/task-plugins.ts";
 import type { PlannerDatabase } from "../interfaces/database.ts";
 import type { Task } from "../interfaces/plan.ts";
@@ -53,6 +54,11 @@ function sameScope(a: FactScope, b: FactScope): boolean {
 
 export class TaskPlugins {
 	readonly workflows: PluginWorkflows;
+	private readonly goalDefinitions = new Map<string, GoalSubtypeDefinition>();
+
+	enabledGoalType(id: string) {
+		return this.db.installations().has(id.split(".")[0]) ? this.goalDefinitions.get(id) : undefined;
+	}
 	private readonly types = new Map<string, { pluginId: string; definition: Definition }>();
 	private readonly plugins = new Map<string, TaskPlugin>();
 	private readonly features = new Map<string, { consumer: string; feature: PluginFeature }>();
@@ -64,6 +70,7 @@ export class TaskPlugins {
 		plugins: readonly TaskPlugin[],
 		private readonly factAccess?: PluginFactAccess,
 		effects: ReadonlyMap<string, EffectHandler> = new Map(),
+		readonly extractTitle?: (task: Task, definition: Definition, subtype: TaskSubtype, text: string) => void,
 	) {
 		const metrics = new Map<string, number>();
 		this.workflows = new PluginWorkflows(planner, db, this.types, effects, metrics);
@@ -76,6 +83,12 @@ export class TaskPlugins {
 				if (!metric.id.startsWith(plugin.id + ".") || metrics.has(metric.id))
 					throw new Error("Invalid or duplicate metric " + metric.id);
 				metrics.set(metric.id, metric.version);
+			}
+			for (const definition of plugin.goalSubtypes ?? []) {
+				if (!definition.id.startsWith(plugin.id + ".") || this.goalDefinitions.has(definition.id) ||
+					definition.metrics.some(id => !plugin.metrics?.some(m => m.id === id)))
+					throw new Error("Invalid goal subtype " + definition.id);
+				this.goalDefinitions.set(definition.id, definition);
 			}
 			const factIds = new Set<string>();
 			for (const fact of plugin.facts ?? []) {
@@ -129,6 +142,7 @@ export class TaskPlugins {
 					label: plugin.label,
 					description: plugin.description,
 					metrics: plugin.metrics,
+					goalSubtypes: plugin.goalSubtypes?.map(({ id, label, version, fields }) => goalType.parse({ id, label, version, fields })),
 					facts: plugin.facts,
 					enabled: false,
 					features: plugin.features?.map(({ requires, ...feature }) => ({
@@ -216,9 +230,11 @@ export class TaskPlugins {
 				this.db.installations().get(id),
 			);
 			if (!enabled) return;
+			const enabledTypeIds = this.enabledTypes().map(({ definition }) => definition.id);
 			for (const definition of plugin.subtypes) {
-				for (const taskId of this.db.staleAutomatic(definition.id))
-					this.db.enqueue(taskId, Date.now());
+				const peers = enabledTypeIds.filter((typeId) => typeId !== definition.id);
+				for (const taskId of this.db.automaticToRecheck(definition.id, peers))
+					this.db.requestClassification(taskId, Date.now());
 			}
 		});
 		return this.installations().find((installation) => installation.id === id)!;
@@ -232,13 +248,12 @@ export class TaskPlugins {
 		});
 	}
 
-	protectedTypes(taskId: string) {
+	incompatibleTypes(taskId: string) {
 		return new Set(
 			this.db
 				.storedTypes(taskId)
 				.filter(
 					(row) =>
-						row.source === "manual" ||
 						row.version !== this.types.get(row.typeId)?.definition.schemaVersion,
 				)
 				.map((row) => row.typeId),
@@ -265,15 +280,25 @@ export class TaskPlugins {
 			subtypes,
 			...(workflows.length ? { workflows } : {}),
 			classification: this.db.classification(id),
+			...(this.db.extracting([id]).has(id) && { extracting: true }),
 			lastClassification: this.db.lastResult(id, task.title, enabled),
 		};
 	}
 
-	attachAtCapture(id: string, typeId: string) {
+	captureTiming(typeId?: string) {
+		return typeId ? this.types.get(typeId)?.definition.captureTiming : undefined;
+	}
+
+	attachAtCapture(id: string, typeId: string, rawInput?: string, alias?:string) {
 		const definition = this.types.get(typeId)?.definition;
 		if (!definition?.captureCommand)
 			throw new PlannerError(404, "Task capture command unavailable");
-		return this.write(id, typeId, { revision: null, data: definition.initialData });
+		const task = this.getTask(id);
+		if (alias && !Object.hasOwn(definition.captureAliases ?? {},alias)) throw new PlannerError(409,"Capture shortcut unavailable.");
+		const data = { ...definition.initialData, ...definition.fromTitle?.(rawInput ?? task.title), ...(alias && definition.captureAliases?.[alias]) };
+		const record = this.write(id, typeId, { revision: null, data });
+		this.extractTitle?.(task, definition, record, rawInput ?? task.title);
+		return record;
 	}
 
 	write(id: string, typeId: string, input: WriteTaskSubtype) {
