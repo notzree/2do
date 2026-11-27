@@ -1,8 +1,18 @@
 import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
+import { drizzle } from "drizzle-orm/durable-sqlite";
 import { expect, it } from "vite-plus/test";
+import { Planner } from "../src/core/planner.ts";
+import { SubtypeExtraction } from "../src/core/subtype-extraction.ts";
+import { TaskPlugins } from "../src/core/task-plugins.ts";
+import { SqlitePlannerDatabase } from "../src/db/planner.ts";
+import { ExtractionQueue } from "../src/db/subtype-extraction.ts";
+import { SqliteTaskPluginDatabase } from "../src/db/task-plugins.ts";
 import { clairicExtractor } from "../src/extractors/clairic.ts";
 import { extractTaskTime } from "../src/extractors/task-time.ts";
+import type { CommitTaskWrite } from "../src/interfaces/database.ts";
+import { createTask } from "../src/interfaces/plan.ts";
 import { taskDetails } from "../src/interfaces/task-plugins.ts";
+import { nutritionPlugin, mealType } from "../src/plugins/meal.ts";
 
 const context = {
   timeZone: "America/Toronto",
@@ -227,3 +237,55 @@ it("discards an extraction if the user edits the subtype during inference", asyn
   await expect.poll(async () => (await f.details()).extracting, { timeout: 10000 }).toBeUndefined();
   expect((await f.details()).subtypes[0].data).toEqual({ foods: ["soup"] });
 }, 15000);
+
+it("processes a bounded batch of subtype field jobs and retries a failed job independently", async () => {
+  const stub = env.USER_PLANNER.getByName(crypto.randomUUID());
+  await runInDurableObject(stub, async (_, { storage }) => {
+    const store = drizzle(storage);
+    const db = new SqlitePlannerDatabase(store);
+    const plugins = new TaskPlugins(db, new SqliteTaskPluginDatabase(store), [nutritionPlugin]);
+    const planner = new Planner(db);
+    const queue = new ExtractionQueue(store);
+    const commit: CommitTaskWrite = async (write) => db.transaction(write);
+    const release = Promise.withResolvers<void>();
+    const started: string[] = [];
+    let fail = true;
+    let firstTitle: string | undefined;
+    const extraction = new SubtypeExtraction(queue, db, plugins, async (title) => {
+      started.push(title);
+      firstTitle ??= title;
+      await release.promise;
+      if (fail && title === firstTitle) throw new Error("Temporary extractor failure");
+      return { foods: ["soup"] };
+    });
+    plugins.setEnabled("nutrition", true);
+    const tasks = Array.from({ length: 6 }, (_, i) => {
+      const task = planner.create(createTask.parse({ title: "Lunch " + i }));
+      const record = plugins.attachAtCapture(task.id, mealType.id);
+      extraction.enqueue(task, mealType, record, task.title);
+      return task;
+    });
+
+    const batch = extraction.processDue(commit);
+    try {
+      await expect.poll(() => started.length, { timeout: 1000 }).toBe(4);
+    } finally {
+      release.resolve();
+      await batch;
+    }
+    const details = () => tasks.map((task) => plugins.details(task.id));
+    expect(details().filter((d) => d.subtypes[0].data?.foods).length).toBe(3);
+    const failed = tasks.find((task) => task.title === firstTitle)!;
+    expect(plugins.details(failed.id)).toMatchObject({
+      extracting: true,
+      subtypes: [{ source: "manual", data: {} }],
+    });
+
+    fail = false;
+    storage.sql.exec("UPDATE subtype_extraction SET due = 0 WHERE taskId = ?", failed.id);
+    await extraction.processDue(commit);
+    expect(started.filter((title) => title === firstTitle)).toHaveLength(2);
+    expect(details().every((d) => !d.extracting && !!d.subtypes[0].data?.foods)).toBe(true);
+    expect(queue.nextDue()).toBeNull();
+  });
+});

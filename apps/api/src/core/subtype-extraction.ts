@@ -1,5 +1,5 @@
 import type { ExtractionJob, ExtractionQueue } from "../db/subtype-extraction.ts";
-import type { TitleExtractor } from "../extractors/clairic.ts";
+import type { ExtractionField, TitleExtractor } from "../extractors/clairic.ts";
 import type { CommitTaskWrite, PlannerDatabase } from "../interfaces/database.ts";
 import { fieldGroupData, fieldName, readFieldValue } from "../interfaces/subtype-field-values.ts";
 import type { Task } from "../interfaces/plan.ts";
@@ -8,6 +8,8 @@ import type { PluginData } from "../interfaces/plugin-workflows.ts";
 import type { TaskPlugins } from "./task-plugins.ts";
 
 type Definition = TaskSubtypeDefinition<PluginData, unknown>;
+const leaseMs = 60_000;
+const maxBatchSize = 4;
 
 function missingFields(definition: Definition, data: PluginData) {
   return (definition.editor ?? []).flatMap((group) =>
@@ -68,19 +70,25 @@ export class SubtypeExtraction {
   }
 
   async processDue(commit: CommitTaskWrite) {
-    const leaseMs = 60_000;
-    const work = await commit(() => {
-      const job = this.queue.claim(Date.now(), leaseMs);
-      if (!job) return;
-      const current = this.current(job);
-      if (!current || job.attempts > 3) {
-        this.queue.finish(job);
-        return;
-      }
-      return { job, fields: missingFields(current.definition, current.data) };
-    });
-    if (!work) return;
-    const { job, fields } = work;
+    const work = await commit(() =>
+      this.queue.claimDue(Date.now(), leaseMs, maxBatchSize).flatMap((job) => {
+        const current = this.current(job);
+        if (!current || job.attempts > 3) {
+          this.queue.finish(job);
+          return [];
+        }
+        return [{ job, fields: missingFields(current.definition, current.data) }];
+      }),
+    );
+    // Keep each extraction in its own model context and wait for every claim to settle.
+    const results = await Promise.allSettled(
+      work.map(({ job, fields }) => this.processJob(commit, job, fields)),
+    );
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+  }
+
+  private async processJob(commit: CommitTaskWrite, job: ExtractionJob, fields: ExtractionField[]) {
     try {
       const values = fields.length
         ? await this.extract(job.input.text, fields, AbortSignal.timeout(leaseMs))

@@ -34,18 +34,19 @@ export class ExtractionQueue {
       .from(jobs)
       .get()!.due;
   }
-  claim(now: number, leaseMs: number) {
-    const job = this.db
+  claimDue(now: number, leaseMs: number, limit: number) {
+    const ready = this.db
       .select()
       .from(jobs)
       .where(lte(jobs.due, now))
-      .orderBy(jobs.due)
-      .limit(1)
-      .get();
-    if (!job) return;
-    const claimed = { attempts: job.attempts + 1, due: now + leaseMs };
-    this.db.update(jobs).set(claimed).where(lease(job)).run();
-    return { ...job, ...claimed };
+      .orderBy(jobs.due, jobs.taskId, jobs.typeId)
+      .limit(limit)
+      .all();
+    return ready.map((job) => {
+      const claimed = { attempts: job.attempts + 1, due: now + leaseMs };
+      this.db.update(jobs).set(claimed).where(lease(job)).run();
+      return { ...job, ...claimed };
+    });
   }
   finish(job: ExtractionJob) {
     return this.db.delete(jobs).where(lease(job)).returning({ id: jobs.taskId }).get();
