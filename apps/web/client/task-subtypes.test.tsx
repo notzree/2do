@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vite-plus/test";
 import { task as taskSchema } from "@2do/api/plan";
 import { pluginInstallations, taskDetails, type TaskSubtypeEditor } from "@2do/api/task-plugins";
+import { InlineTaskProperties } from "./inline-task-properties.tsx";
 import { PromptFields, TaskSubtypes } from "./task-subtypes.tsx";
 
 const task = taskSchema.parse({
@@ -103,7 +104,7 @@ function renderTypes(enabled: boolean, details: object, compact = false) {
   }));
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
-      <TaskSubtypes task={task} active openPlugins={() => {}} compact={compact} />
+      {compact ? <InlineTaskProperties task={task} active inspect={() => {}} /> : <TaskSubtypes task={task} active openPlugins={() => {}} />}
     </QueryClientProvider>,
   );
 }
@@ -125,7 +126,7 @@ it.each([false, true])("shows an attached subtype's workflow actions (compact=%s
     }],
   }, compact);
   expect(markup).toContain("Ready to log");
-  expect(markup).toContain(">Log study time</button>");
+  expect(markup).toContain("Log study time");
 });
 
 it("shows a recorded no-match result separately from a task awaiting its first classification", () => {
@@ -225,13 +226,15 @@ it.each(["manual", "automatic"] as const)(
     });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={client}>
-        <TaskSubtypes task={task} active openPlugins={() => {}} compact />
+        <InlineTaskProperties task={task} active inspect={() => {}} />
       </QueryClientProvider>,
     );
-    expect(markup).toContain("Edit Session details");
+    expect(markup).toContain('aria-label="Session fields"');
+    expect(markup).not.toContain("Edit Session details");
     expect(markup).toContain("Target topics");
     expect(markup).toContain("Math");
-    expect(markup).toContain("Add Exam");
+    expect(markup).toContain('aria-label="Add type"');
+    expect(markup).toContain('aria-label="Remove Session"');
     expect(markup).not.toContain("Hidden type");
     expect(markup).toContain(source === "manual" ? "User-confirmed" : "Inferred by Clef");
   },

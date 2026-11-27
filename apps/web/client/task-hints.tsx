@@ -1,17 +1,21 @@
-import { createContext, useContext, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Ellipsis, Sparkles, X } from "lucide-react";
+import { createContext, useContext, useId, useRef, useState, type ReactNode } from "react";
+import { ChevronRight, Ellipsis } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import type { Task } from "@2do/api/plan";
 import type { TaskSummary } from "@2do/api/task-summaries";
 import { summariesKey, type useWeekTaskHints } from "./task-summary-api.ts";
 import { api, queryClient } from "./query.ts";
-import { PromptFields, TaskSubtypes } from "./task-subtypes.tsx";
+import { PromptFields } from "./task-subtypes.tsx";
+import { InlineTaskProperties } from "./inline-task-properties.tsx";
 import { TaskTypeIcon } from "./task-type-icon.tsx";
 import "./task-hints.css";
 
 const Summaries = createContext<ReadonlyMap<string, TaskSummary>>(new Map());
 
-export function WeekTaskHints({ hints, children }: {
+export function WeekTaskHints({
+  hints,
+  children,
+}: {
   hints: ReturnType<typeof useWeekTaskHints>;
   children: ReactNode;
 }) {
@@ -130,20 +134,34 @@ export function TaskHints({
   meta?: string;
 }) {
   const summary = useContext(Summaries).get(task.id);
-  const [expanded, setExpanded] = useState(false);
-  const [opened, setOpened] = useState(false);
-  const [editing, setEditing] = useState<TaskSummary["prompts"][number]>();
-  const toggle = useRef<HTMLButtonElement>(null);
+  const [panel, setPanel] = useState<"initial" | "open" | "closed">("initial");
+  const expanded = panel === "open";
+  const body = useRef<HTMLDivElement>(null);
+  const bodyId = useId();
   const types = summary?.types ?? [];
-  // A changed batch key briefly has no data. Keep the open field's draft mounted during the read.
-  const active =
-    editing && (!summary || types.some((t) => t.typeId === editing.typeId)) ? editing : undefined;
   const prompts = summary?.prompts.filter((p) => !p.skipped) ?? [];
   const inlays = summary?.inlays ?? [];
-  const visiblePrompts =
-    active && !prompts.some((p) => p.id === active.id) ? [...prompts, active] : prompts;
+  const context =
+    [
+      ...inlays.map((inlay) =>
+        inlays.length > 1 || Number.isFinite(Number(inlay.value))
+          ? inlay.label + " · " + inlay.value
+          : inlay.value,
+      ),
+      ...new Set(types.flatMap((type) => (type.status ? [type.status] : []))),
+      meta,
+      task.carriedFrom?.length &&
+        (task.createdDate ? "Created " + task.createdDate : "Carried from " + task.carriedFrom[0]) +
+          " · carried " +
+          task.carriedFrom.length +
+          "×",
+      prompts.length > 0 &&
+        (prompts.length === 1 ? "1 optional detail" : prompts.length + " optional details"),
+    ]
+      .filter(Boolean)
+      .join(" · ") || "Details";
   return (
-    <div className="task-hints">
+    <div className="task-hints" data-expanded={expanded || undefined}>
       <div className="hint-heading">
         {title}
         <div className="hint-tags">
@@ -185,79 +203,62 @@ export function TaskHints({
       </div>
       <div className="hint-context">
         <button
-          ref={toggle}
           type="button"
           className="hint-toggle"
           data-task-enrich
           aria-expanded={expanded}
-          onClick={() => {
-            setOpened(true);
-            setExpanded(!expanded);
+          aria-controls={panel !== "initial" ? bodyId : undefined}
+          aria-label={`${expanded ? "Collapse" : "Expand"} details for ${task.title}. ${context}`}
+          onKeyDown={(event) => {
+            if (!expanded || event.key !== "l" || event.altKey || event.ctrlKey || event.metaKey)
+              return;
+            const log = body.current?.querySelector<HTMLButtonElement>("[data-log-shortcut]");
+            if (log) {
+              event.preventDefault();
+              event.stopPropagation();
+              log.click();
+            }
           }}
+          onClick={() => setPanel(expanded ? "closed" : "open")}
         >
-          <Sparkles size={12} aria-hidden="true" />
-          {!prompts.length
-            ? "Details"
-            : prompts.length + (prompts.length === 1 ? " optional detail" : " optional details")}
-          <ChevronDown size={12} aria-hidden="true" />
+          <ChevronRight size={13} aria-hidden="true" />
+          <span>{context}</span>
         </button>
-        {meta && <span>{meta}</span>}
-        {!!task.carriedFrom?.length && <span className="muted" title={`Carried from ${task.carriedFrom.join(", ")}`}>
-          {task.createdDate ? "Created " + task.createdDate : "Carried from " + task.carriedFrom[0]} · carried {task.carriedFrom.length}×
-        </span>}
-        {inlays.map((v) => (
-          <span
-            key={v.typeId + "." + v.field}
-            className="hint-value"
-            title={v.label + " · " + v.value}
-          >
-            {v.label} · {v.value}
-          </span>
-        ))}
         {summary?.classification === "failed" && (
           <button type="button" className="hint-failed" onClick={inspect}>
             Classification failed
           </button>
         )}
       </div>
-      {(opened || active) && (
-        <div className="hint-body" hidden={!expanded}>
-          <div className="hint-caption">
-            <span>Optional details</span>
-            <button
-              type="button"
-              className="plain"
-              aria-label="Collapse optional details"
-              onClick={() => {
-                setExpanded(false);
-                toggle.current?.focus();
-              }}
-            >
-              <X size={13} aria-hidden="true" />
-            </button>
-          </div>
-          {visiblePrompts.map((prompt) => (
-            <div key={prompt.id}>
-              <div className="hint-actions">
-                <span>{prompt.label}</span>
-                <button
-                  type="button"
-                  aria-expanded={active?.id === prompt.id}
-                  aria-label={
-                    (active?.id === prompt.id ? "Close detail: " : "Add detail: ") + prompt.label
-                  }
-                  onClick={() => setEditing(active?.id === prompt.id ? undefined : prompt)}
-                >
-                  {active?.id === prompt.id ? "Close" : "Add detail"}
-                </button>
-                {active?.id !== prompt.id && (
-                  <PromptPreference taskId={task.id} prompt={prompt} skipped />
-                )}
-              </div>
-              {active?.id === prompt.id && <PromptFields task={task} prompt={active} />}
-            </div>
-          ))}
-          <TaskSubtypes task={task} active={expanded} openPlugins={inspect} compact />
+      {panel !== "initial" && (
+        <div className="hint-body" id={bodyId} ref={body} hidden={!expanded}>
+          <InlineTaskProperties
+            task={task}
+            active={expanded}
+            inspect={inspect}
+            renderPrompts={(typeId) =>
+              prompts
+                .filter((prompt) => prompt.typeId === typeId)
+                .map((prompt) => (
+                  <div className="hint-actions" key={prompt.id}>
+                    <span>{prompt.label}</span>
+                    <button
+                      type="button"
+                      aria-label={"Add detail: " + prompt.label}
+                      onClick={() => {
+                        const label = body.current?.querySelector<HTMLLabelElement>(
+                          `[data-subtype="${CSS.escape(typeId)}"] [data-field="${CSS.escape(prompt.field)}"]`,
+                        );
+                        label?.control?.focus();
+                      }}
+                    >
+                      Add detail
+                    </button>
+                    <PromptPreference taskId={task.id} prompt={prompt} skipped />
+                  </div>
+                ))
+            }
+          />
         </div>
       )}
     </div>

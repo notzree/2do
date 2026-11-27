@@ -11,6 +11,18 @@ export function blockStart(selection: Selection) {
 	// Node and whole-document selections can start directly in the document.
 	return Math.min($from.pos, $from.doc.content.size - $from.doc.lastChild!.nodeSize);
 }
+export function deleteEmptyLine(view: EditorView, direction: -1 | 1) {
+	const { doc, selection } = view.state;
+	const cursor = selection instanceof TextSelection && selection.$cursor;
+	if (!cursor || !cursor.parent.isTextblock || cursor.parent.content.size || doc.childCount === 1)
+		return false;
+
+	const from = cursor.before();
+	const tr = view.state.tr.delete(from, cursor.after());
+	tr.setSelection(Selection.near(tr.doc.resolve(from), direction));
+	view.dispatch(tr.scrollIntoView());
+	return true;
+}
 export function deleteCurrentBlock(tr: Transaction, deleteTask?: (id: string) => void) {
 	const pos = blockStart(tr.selection);
 	const node = tr.doc.nodeAt(pos);

@@ -75,6 +75,22 @@ export function gmailInbox(auth: OAuth2Client, topicName: string): Email {
         nextPage: data.nextPageToken ?? undefined,
       };
     },
+    async excerpt(id) {
+      try {
+        const {data} = await users.messages.get({
+          userId, id, format: "full", fields: "internalDate,labelIds,snippet,payload(headers)",
+        });
+        if (!data.labelIds?.includes("INBOX")) return null;
+        return {
+          subject: (data.payload?.headers?.find(h => h.name?.toLowerCase() === "subject")?.value ?? "").slice(0, 240),
+          snippet: (data.snippet ?? "").slice(0, 784),
+          receivedAt: Number(data.internalDate) || 0,
+        };
+      } catch (error) {
+        if (httpStatus(error) === 404) return null;
+        throw error;
+      }
+    },
     async stop() {
       await users.stop({ userId });
     },

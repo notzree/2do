@@ -199,7 +199,7 @@ it("sends the uploaded bytes and portion note to the vision model and uses the t
   const photo = await uploadPhoto(stub);
   await runInDurableObject(stub, async (_, ctx) => {
     const images = new PlannerImages(drizzle(ctx.storage), env.NOTEBOOK_IMAGES, ctx.id.toString());
-    const run = vi.fn().mockResolvedValue({ response: '{"calories":340,"proteinGrams":18}' });
+    const run = vi.fn(async () => Response.json({ response: '{"calories":340,"proteinGrams":18}' }));
     const signal = new AbortController().signal;
     const estimate = mealEstimator({ run }, images);
     const note = "Half the portion pictured";
@@ -218,7 +218,7 @@ it("sends the uploaded bytes and portion note to the vision model and uses the t
           },
         ],
       }),
-      { signal },
+      { returnRawResponse: true, signal },
     ]);
     await estimate({ foods: ["tofu"], note }, signal);
     expect(run.mock.calls[1]).toEqual([
@@ -229,9 +229,9 @@ it("sends the uploaded bytes and portion note to the vision model and uses the t
           { role: "user", content: JSON.stringify({ foods: ["tofu"], note }) },
         ],
       }),
-      { signal },
+      { returnRawResponse: true, signal },
     ]);
-    run.mockResolvedValueOnce({ response: { proteinGrams: -1 } });
+    run.mockResolvedValueOnce(Response.json({ response: { proteinGrams: -1 } }));
     await expect(estimate({ note }, signal)).rejects.toThrow();
   });
 });

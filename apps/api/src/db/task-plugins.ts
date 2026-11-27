@@ -146,12 +146,17 @@ export class SqliteTaskPluginDatabase {
 			.leftJoin(jobs, eq(tasks.id, jobs.taskId))
 			.where(inArray(tasks.id, ids))
 			.all();
-		const matches = new Map<string, TaskSubtype[]>();
+		type SummarySubtype = {
+			subtype: TaskSubtype;
+			state: Pick<typeof workflowStates.$inferSelect, "version" | "document"> | null;
+		};
+		const matches = new Map<string, SummarySubtype[]>();
 		if (enabledTypes.size) {
 			const found = this.db
-				.select({ subtype: subtypes })
+				.select({ subtype: subtypes, state: { version: workflowStates.version, document: workflowStates.document } })
 				.from(subtypes)
 				.innerJoin(tasks, eq(tasks.id, subtypes.taskId))
+				.leftJoin(workflowStates, and(eq(workflowStates.taskId, subtypes.taskId), eq(workflowStates.typeId, subtypes.typeId)))
 				.where(
 					and(
 						inArray(subtypes.taskId, ids),
@@ -161,10 +166,10 @@ export class SqliteTaskPluginDatabase {
 				)
 				.orderBy(subtypes.typeId)
 				.all();
-			for (const { subtype } of found) {
+			for (const { subtype, state } of found) {
 				if (!enabledTypes.has(subtype.typeId)) continue;
 				const list = matches.get(subtype.taskId) ?? [];
-				list.push(subtypeRecord(subtype));
+				list.push({ subtype: subtypeRecord(subtype), state });
 				matches.set(subtype.taskId, list);
 			}
 		}

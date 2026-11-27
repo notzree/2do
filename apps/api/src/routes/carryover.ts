@@ -25,6 +25,7 @@ export const carryoverOperations = {
   }),
   readCarryoverSettings: createRoute({
     operationId: "readCarryoverSettings",
+    "x-mcp": true,
     method: "get",
     path: settingsPath,
     summary: "Read automatic carryover settings",
@@ -32,6 +33,7 @@ export const carryoverOperations = {
   }),
   setCarryoverSettings: createRoute({
     operationId: "setCarryoverSettings",
+    "x-mcp": true,
     method: "put",
     path: settingsPath,
     summary: "Configure daily carryover at 6 AM in the selected time zone",

@@ -78,6 +78,34 @@
       "when": 1795722682017,
       "tag": "0010_preserve_confirmed_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795753965970,
+      "tag": "0011_agent_inbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795809967265,
+      "tag": "0012_agents_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1795811037954,
+      "tag": "0013_workspace_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1795812572018,
+      "tag": "0014_connected_workouts",
+      "breakpoints": true
     }
   ]
 }

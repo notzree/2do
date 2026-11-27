@@ -11,8 +11,9 @@ export const proposeTime = z.strictObject({
 export const decision = z.strictObject({ decision: z.enum(["accept", "reject"]) });
 export const timeProposal = proposeTime.extend({
 	before: fixedSchedule,
+	calendarTarget:z.strictObject({account:z.string(),remoteId:z.string(),status:z.enum(["linked","conflict","imported"])}).optional(),
 	source: z.enum(["user", "copilot"]),
-	status: z.enum(["pending", "accepted", "rejected", "undone"]),
+	status: z.enum(["pending", "accepted", "rejected", "undone", "stale"]),
 	createdAt: z.iso.datetime(),
 	decidedAt: z.iso.datetime().optional(),
 	acceptedRevision: z.int().nonnegative().optional(),

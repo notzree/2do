@@ -1,7 +1,9 @@
+import { stepNotebookSurface } from "./notebook-focus.ts";
 import type { EditorView } from "@tiptap/pm/view";
 import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import { VimMode } from "@prose-motions/core";
-import { deleteCurrentBlock, selectLine, stepLine } from "./editor-keys.ts";
+import { editSelectedTaskTitle, titleCaretForKey } from "./commands.ts";
+import { addLine, deleteCurrentBlock, motion, selectLine, stepLine } from "./editor-keys.ts";
 
 export type EditorMode = "Insert" | "Normal";
 
@@ -59,34 +61,17 @@ export function moveNotebookCursor(view: EditorView, direction: 1 | -1) {
 	stepNotebookSurface(view.dom, direction);
 }
 
-// Day editors and scheduled rows are siblings in the rendered notebook.
-// Both entry points must traverse the same stops in the same order.
-export function stepNotebookSurface(current: HTMLElement, direction: 1 | -1) {
-	const stops = Array.from(
-		current.closest("main")?.querySelectorAll<HTMLElement>(".ProseMirror, .task-row [data-task]") ??
-			[],
-	).filter((el) => el.getClientRects().length);
-	const index = stops.indexOf(current);
-	const next = index >= 0 ? stops[index + direction] : undefined;
-	if (!next) return false;
-	if (next.matches(".ProseMirror")) {
-		next.dispatchEvent(new CustomEvent("notebook-enter", { detail: direction }));
-	} else {
-		next.focus({ preventScroll: true });
-		next.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}
+export function beginNotebookInsert(view: EditorView, key: string, enterInsertMode: () => void) {
+	if (!["i", "I", "a", "A", "o", "O"].includes(key)) return false;
+	const titleCaret = titleCaretForKey(key);
+	if (titleCaret && editSelectedTaskTitle(view, titleCaret)) return true;
+	if (key === "o" || key === "O" || view.state.selection instanceof NodeSelection)
+		addLine(view, key === "O" || key.toLowerCase() === "i");
+	else if (key === "a") motion(view, "l");
+	else if (key === "A") motion(view, "$");
+	else if (key === "I") motion(view, "^");
+	enterInsertMode();
 	return true;
-}
-
-export function focusTaskTitle(title: HTMLElement, direction?: 1 | -1) {
-	if (title.closest(".embedded.taskRef")) {
-		title.dispatchEvent(
-			new CustomEvent("notebook-select-task", { bubbles: true, detail: direction }),
-		);
-	} else {
-		title.focus({ preventScroll: true });
-		title.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}
 }
 
 export function bindNotebookEditorEvents(view: EditorView, setMode: (mode: EditorMode) => void) {
@@ -126,10 +111,15 @@ export function bindNotebookEditorEvents(view: EditorView, setMode: (mode: Edito
 	// Focusing the contenteditable directly lets the browser place its text
 	// caret next to a non-editable atom, dropping the editor's NodeSelection.
 	const refocus = () => view.focus();
+	const insert = () => {
+		view.focus();
+		beginNotebookInsert(view, "i", () => setMode("Insert"));
+	};
 
 	view.dom.addEventListener("notebook-enter", enter);
 	view.dom.addEventListener("notebook-select-task", selectTask);
 	view.dom.addEventListener("notebook-refocus", refocus);
+	view.dom.addEventListener("notebook-insert", insert);
 	view.dom.addEventListener("notebook-write", write);
 	view.dom.addEventListener("notebook-task", write);
 
@@ -137,6 +127,7 @@ export function bindNotebookEditorEvents(view: EditorView, setMode: (mode: Edito
 		view.dom.removeEventListener("notebook-enter", enter);
 		view.dom.removeEventListener("notebook-select-task", selectTask);
 		view.dom.removeEventListener("notebook-refocus", refocus);
+		view.dom.removeEventListener("notebook-insert", insert);
 		view.dom.removeEventListener("notebook-write", write);
 		view.dom.removeEventListener("notebook-task", write);
 	};

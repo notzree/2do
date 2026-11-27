@@ -1,4 +1,5 @@
 import { useState, type MouseEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
   Columns3,
@@ -6,11 +7,15 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
-  Inbox,
+  GitBranch,
+  Plus,
+  Sparkles,
 } from "lucide-react";
 import { dayKey, formatDate, type View } from "./calendar.ts";
 import type { Preferences } from "./preferences.ts";
 import { NotebookBrand } from "./notebook-brand.tsx";
+import { agentsHref, chatLocation, openAgents, type AgentLocation } from "./agents-navigation.ts";
+import { chatsQuery, newSideChat } from "./chats.ts";
 
 const nav = [
   { view: "week", title: "Week", Icon: Columns3 },
@@ -26,10 +31,33 @@ type Props = {
   settingsHref: string;
   openSettings: () => void;
   prefs: Preferences;
-  reviewOpen: boolean;
   pendingReview: number;
-  review: () => void;
+  agents: AgentLocation | null;
 };
+
+type Navigate = (event: MouseEvent<HTMLAnchorElement>, action: () => void) => void;
+
+function RecentChats({ route, navigate, close }: { route: AgentLocation; navigate: Navigate; close: () => void }) {
+  const { data } = useQuery(chatsQuery);
+  const recent = data?.filter(chat => !chat.archivedAt).slice(0, 7);
+  return (
+    <section className="contents recent-chats" aria-label="Recent conversations">
+      <div className="recent-heading">
+        <h2>Recent conversations</h2>
+        <button type="button" aria-label="New side chat" title="New side chat" onClick={() => { newSideChat(); close(); }}>
+          <Plus size={15} />
+        </button>
+      </div>
+      {recent?.map(chat => (
+        <a key={chat.id} href={agentsHref(chatLocation(chat.id))}
+          aria-current={route.page === "chat" && route.id === chat.id ? "page" : undefined}
+          onClick={event => navigate(event, () => openAgents(chatLocation(chat.id)))}>
+          <GitBranch size={14} /><span>{chat.title}</span>
+        </a>
+      ))}
+    </section>
+  );
+}
 export function Sidebar({
   view,
   date,
@@ -39,7 +67,7 @@ export function Sidebar({
   settingsHref,
   openSettings,
   prefs,
-  reviewOpen, pendingReview, review,
+  pendingReview, agents,
 }: Props) {
   const [open, setOpen] = useState(false);
   function navigate(event: MouseEvent<HTMLAnchorElement>, action: () => void) {
@@ -85,7 +113,7 @@ export function Sidebar({
             <a
               key={v}
               href={`/app/${v}?date=${dayKey(date)}`}
-              aria-current={!settings && view === v ? "page" : undefined}
+              aria-current={!settings && !agents && view === v ? "page" : undefined}
               onClick={(e) => navigate(e, () => go(v, date))}
             >
               <Icon size={17} />
@@ -93,12 +121,14 @@ export function Sidebar({
               {prefs.keysEnabled && <kbd>g {prefs.bindings[v]}</kbd>}
             </a>
           ))}
-          <button type="button" className="review-link" aria-pressed={reviewOpen}
-            onClick={() => { setOpen(false); review(); }}>
-            <Inbox size={17} /> Review {pendingReview > 0 && <span aria-label={pendingReview + " pending"}>{pendingReview}</span>}
-          </button>
+          <a href={agentsHref({ page: "main" })} aria-current={agents ? "page" : undefined}
+            onClick={event => navigate(event, () => openAgents())}>
+            <Sparkles size={17} /> Agents
+            {pendingReview > 0 && <small aria-label={pendingReview + " need action"}>{pendingReview}</small>}
+            {prefs.keysEnabled && <kbd>g {prefs.bindings.agents}</kbd>}
+          </a>
         </nav>
-        {!settings && (
+        {agents ? <RecentChats route={agents} navigate={navigate} close={() => setOpen(false)} /> : !settings && (
           <div className="contents">
             <h2>{view === "calendar" ? "Selected day" : "On this page"}</h2>
             {days.map((d) => (

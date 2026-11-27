@@ -42,22 +42,26 @@ export class TaskSummaries {
     );
     const extracting = this.plugins.db.extracting(ids);
     const rows = this.plugins.db.summaryRows(ids, new Set(definitions.keys()));
-    return rows.map(({ task, classification, subtypes: active, skipped }) => ({
-      id: task.id,
-      ...(extracting.has(task.id) && { extracting: true }),
-      classification,
-      types: active.map(({ typeId, source }) => ({
-        typeId,
-        source,
-        label: definitions.get(typeId)!.label,
-        icon: definitions.get(typeId)!.icon,
-      })),
-      inlays: active.flatMap((s) => fieldInlays(s, definitions.get(s.typeId)!)),
-      prompts: eligibleTaskPrompts({ task, subtypes: active }, installations).map((prompt) => ({
-        ...prompt,
-        skipped: skipped?.has(prompt.id) ?? false,
-      })),
-    }));
+    return rows.map(({ task, classification, subtypes, skipped }) => {
+      const active = subtypes.map(({ subtype }) => subtype);
+      return {
+        id: task.id,
+        ...(extracting.has(task.id) && { extracting: true }),
+        classification,
+        types: subtypes.map(({ subtype, state }) => ({
+          typeId: subtype.typeId,
+          source: subtype.source,
+          label: definitions.get(subtype.typeId)!.label,
+          icon: definitions.get(subtype.typeId)!.icon,
+          status: this.plugins.workflows.summaryStatus(subtype, state),
+        })),
+        inlays: active.flatMap((s) => fieldInlays(s, definitions.get(s.typeId)!)),
+        prompts: eligibleTaskPrompts({ task, subtypes: active }, installations).map((prompt) => ({
+          ...prompt,
+          skipped: skipped?.has(prompt.id) ?? false,
+        })),
+      };
+    });
   }
 
   setSkipped(taskId: string, promptId: string, skipped: boolean) {

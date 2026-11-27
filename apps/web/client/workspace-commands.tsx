@@ -1,3 +1,4 @@
+import {currentAgents,openAgents} from "./agents-navigation.ts";
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, CheckSquare, ChevronRight, CornerDownLeft, Search, X } from "lucide-react";
 import type { Task } from "@2do/api/plan";
@@ -35,7 +36,9 @@ export function WorkspaceCommands({ scope, tasks, prefs, run, capture, inspect, 
       setTaskSearch(true); setQuery(""); setIndex(0); input.current?.focus();
     } },
     { id: "keymap", name: "Keyboard shortcuts", keys: prefs.keysEnabled ? "?" : undefined, run: () => execute(help) },
-    { id: "review", name: "Open Review inbox", run: () => execute(review) },
+    { id:"find-chat",name:"Find a conversation",run:()=>execute(()=>{openAgents({page:"chats"});requestAnimationFrame(()=>document.querySelector<HTMLInputElement>('[aria-label="Find conversation"]')?.focus());})},
+    ...(currentAgents()?.page==="main"?[{id:"branch",name:"Branch from selected exchange",run:()=>execute(()=>document.querySelector<HTMLButtonElement>(".chat-message:focus-within .message-branch, .chat-message:last-of-type .message-branch")?.click())}]:[]),
+    { id: "review", name: "Open Needs attention", run: () => execute(review) },
     ...commands.map(({ id, name }) => ({
       id, name, keys: prefs.keysEnabled ? "g " + prefs.bindings[id] : undefined,
       run: () => execute(() => run(id)),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runJsonModel, type PlannerAiBinding } from "../workers-ai.ts";
 import type { TaskClassificationInput, TaskClassifier } from "../interfaces/task-classifier.ts";
 
 const model = "@cf/cloudflare/clef-flash";
@@ -20,8 +21,8 @@ export class ClefTaskClassifier implements TaskClassifier {
 		this.run = run;
 	}
 
-	static using(ai: Ai) {
-		return new ClefTaskClassifier((input, signal) => ai.run(model, input, { signal }));
+	static using(ai: PlannerAiBinding) {
+		return new ClefTaskClassifier((input, signal) => runJsonModel(ai, model, input, signal));
 	}
 
 	async classify(inputs: readonly TaskClassificationInput[], signal?: AbortSignal) {

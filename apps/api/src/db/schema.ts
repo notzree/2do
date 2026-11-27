@@ -85,6 +85,8 @@ export const days = sqliteTable("day_page", {
 });
 export const images = sqliteTable("notebook_image", { id: text().primaryKey() });
 export const sideChats = sqliteTable("side_chat", {
+	archivedAt: integer(),
+	branch: text({ mode: "json" }).$type<{ messageId: string; excerpt: string; generation?:string }>(),
 	id: text().primaryKey(),
 	title: text().notNull(),
 	createdAt: integer().notNull(),
@@ -192,3 +194,31 @@ export const goalCheckIns = sqliteTable("goal_check_in", {
 	id: integer().primaryKey(), goalId: text().notNull().references(() => plannerGoals.id, { onDelete: "cascade" }),
 	at: text().notNull(), note: text().notNull(),
 }, (t) => [index("check_ins_by_goal").on(t.goalId, t.id)]);
+
+export type InboxCommand = {
+  captureDate?: string;
+	operation: string; args: Record<string, unknown>; url?: string; method?: string;
+	effects?: import("../interfaces/agent-inbox.ts").InboxEffect[]; steps?: InboxCommand[];
+};
+export type InboxDocument = {
+	taskTitles?: Record<string, string>;
+	deviceCallId?:string;
+	title: string; body: string; choices?: string[];
+	changes?: import("../interfaces/agent-inbox.ts").InboxChange[];
+	conversation?: string; taskId?: string; reminderId?: string; source?: string; answer?: string; expiresAt?:string;
+	elicitation?:import("../interfaces/elicitation.ts").ElicitationView;
+	continuation?:import("../interfaces/elicitation.ts").McpContinuation;
+	nextItemId?:string; providerAnswer?:import("../interfaces/elicitation.ts").ElicitationReply;
+	command?: InboxCommand; authorization?: string; replaces?:string; replacementId?:string;
+};
+export const inboxRows = sqliteTable("agent_inbox", {
+	sequence: integer().primaryKey({autoIncrement:true}),
+	id: text().notNull().unique(),
+	kind: text({enum:["proposal","question","notification"]}).notNull(),
+	status: text().$type<import("../interfaces/agent-inbox.ts").InboxItem["status"]>().notNull(),
+	document: text({mode:"json"}).$type<InboxDocument>().notNull(),
+	createdAt: text().notNull(), version: integer().notNull().default(1),
+	read: integer({mode:"boolean"}).notNull().default(false),
+	archived: integer({mode:"boolean"}).notNull().default(false),
+	due: integer(), attempts: integer().notNull().default(0),
+}, t=>[index("agent_inbox_pending").on(t.status,t.sequence),index("agent_inbox_due").on(t.due)]);

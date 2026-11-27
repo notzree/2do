@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runJsonModel, type PlannerAiBinding } from "../workers-ai.ts";
 import { reportingDay, type MetricDefinition } from "../interfaces/plugin-reports.ts";
 import type { PluginWorkflow, EffectHandler } from "../interfaces/plugin-workflows.ts";
 import { numberField, textListField } from "../interfaces/plugin-fields.ts";
@@ -194,7 +195,7 @@ export const mealWorkflow: PluginWorkflow<
 };
 
 export function mealEstimator(
-  ai: Pick<Ai, "run">,
+  ai: PlannerAiBinding,
   images: Pick<PlannerImages, "dataUrl">,
 ): EffectHandler {
   return async (input, signal) => {
@@ -210,7 +211,8 @@ export function mealEstimator(
       max_tokens: 200,
     };
     const output = photo
-      ? await ai.run(
+      ? await runJsonModel(
+          ai,
           "@cf/meta/llama-4-scout-17b-16e-instruct",
           {
             ...options,
@@ -225,15 +227,16 @@ export function mealEstimator(
               },
             ],
           },
-          { signal },
+          signal,
         )
-      : await ai.run(
+      : await runJsonModel(
+          ai,
           "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
           {
             ...options,
             messages: [system, { role: "user", content: text }],
           },
-          { signal },
+          signal,
         );
     const raw = z.object({ response: z.unknown() }).parse(output).response;
     const result = values.parse(typeof raw === "string" ? JSON.parse(raw) : raw);

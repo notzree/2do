@@ -63,6 +63,7 @@ export const workflowDetails = z.strictObject({
   ...revisions,
   typeId: z.string(),
   status: z.string(),
+  properties: z.array(z.strictObject({ label: z.string(), value: z.string().nullable() })).optional(),
   pending: z.boolean(),
   actions: z.array(
     actionDefinition.extend({ defaults: z.record(z.string(), z.union([z.number(), z.string()])) }),
@@ -93,6 +94,8 @@ export interface PluginWorkflow<Data = PluginData, State extends PluginData = Pl
   schema: z.ZodType<State>;
   initial: State;
   commands: ActionDefinition[];
+  /** Short status suitable for a collapsed task row. */
+  summaryStatus?(state: State): string;
   migrations?: Record<number, (data: PluginData) => PluginData>;
   describe(
     current: WorkflowSnapshot<Data>,
@@ -101,6 +104,7 @@ export interface PluginWorkflow<Data = PluginData, State extends PluginData = Pl
     effects: ReadonlySet<string>,
   ): {
     status: string;
+    properties?: WorkflowDetails["properties"];
     actions: { id: string; label?: string; defaults?: Record<string, string | number> }[];
   };
   transition(

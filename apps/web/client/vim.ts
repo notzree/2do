@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent } from "react";
 import { boundCommand, type Bindings, type Command } from "./preferences.ts";
 import { isTaskInspectorShortcut, requestTitleEdit, titleCaretForKey, toggleFocusedTaskHints } from "./commands.ts";
-import { focusTaskTitle, stepNotebookSurface } from "./editor-navigation.ts";
+import { focusTaskTitle, stepNotebookSurface } from "./notebook-focus.ts";
 
 export const shortcuts = [
 	["Esc / i / a", "Normal mode / insert / append in the editor"],
@@ -93,6 +93,18 @@ export function usePlannerKeys(options: Options) {
 			}
 		}
 		if (target.closest(".writing-surface")) {
+			if (options.enabled && title && (target === title || target.matches('input[type="checkbox"]'))) {
+				if (event.key === "g" && prefix !== "g") {
+					event.preventDefault();
+					return "g";
+				}
+				const command = prefix === "g" && boundCommand(options.bindings, event.key);
+				if (command) {
+					event.preventDefault();
+					options.command(command);
+					return false;
+				}
+			}
 			// Native node-view controls stop ProseMirror keyboard handling. Route
 			// the details shortcut from a focused task button to its own panel.
 			if (
@@ -104,7 +116,6 @@ export function usePlannerKeys(options: Options) {
 			}
 			// Native node-view controls receive their own key events. Return to
 			// the actual editor selection when navigating from a task button.
-			const title = target.closest(".embedded.taskRef")?.querySelector<HTMLElement>("[data-task]");
 			if (
 				options.enabled &&
 				title &&
@@ -176,6 +187,13 @@ export function usePlannerKeys(options: Options) {
 								?.querySelector<HTMLButtonElement>("[data-task]")
 								?.focus();
 						else if (fold) focus(index + 1);
+						break;
+					}
+					case "i": {
+						if (!target.matches("main.notebook-main, body")) return false;
+						const writing = document.getElementById("day-" + options.selectedDay)?.querySelector(".ProseMirror");
+						if (!writing) return false;
+						writing.dispatchEvent(new Event("notebook-insert"));
 						break;
 					}
 					case "o": {

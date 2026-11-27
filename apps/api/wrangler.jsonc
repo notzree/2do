@@ -31,6 +31,7 @@
 	"migrations": [
 		{ "tag": "v1", "new_sqlite_classes": ["UserPlanner"] },
 		{ "tag": "flue-class-FlueCopilotAgent", "new_sqlite_classes": ["FlueCopilotAgent"] },
-		{ "tag": "google-connectors-v1", "new_sqlite_classes": ["GoogleConnection", "GmailDirectory"] }
+		{ "tag": "google-connectors-v1", "new_sqlite_classes": ["GoogleConnection", "GmailDirectory"] },
+		{ "tag": "flue-class-FlueReminderBriefAgent", "new_sqlite_classes": ["FlueReminderBriefAgent"] }
 	]
 }

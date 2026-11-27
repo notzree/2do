@@ -21,18 +21,16 @@ export function configured(env: GoogleSecrets, kind: ConnectorKind) {
       (env.GMAIL_PUBSUB_TOPIC && env.GMAIL_PUSH_SERVICE_ACCOUNT && env.GMAIL_PUSH_SUBSCRIPTION))
   );
 }
+const featureScopes: Record<ConnectorKind, (options: Directions) => string[]> = {
+  gmail: () => ["gmail.readonly"],
+  "google-health": () => ["googlehealth.activity_and_fitness.readonly"],
+  "google-calendar": ({ importEvents, exportEvents }) => [
+    ...(importEvents ? ["calendar.events.readonly"] : []),
+    ...(exportEvents ? ["calendar.app.created", "calendar.calendarlist.readonly"] : []),
+  ],
+};
 export function scopes(kind: ConnectorKind, options: Directions) {
-  const prefix = "https://www.googleapis.com/auth/";
-  const features =
-    kind === "gmail"
-      ? ["gmail.readonly"]
-      : [
-          ...(options.importEvents ? ["calendar.events.readonly"] : []),
-          ...(options.exportEvents
-            ? ["calendar.app.created", "calendar.calendarlist.readonly"]
-            : []),
-        ];
-  return features.map((scope) => prefix + scope);
+  return featureScopes[kind](options).map(scope => "https://www.googleapis.com/auth/" + scope);
 }
 export function oauth(env: GoogleSecrets, kind: ConnectorKind) {
   return new OAuth2Client({

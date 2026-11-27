@@ -1,14 +1,38 @@
 import { z } from "zod";
 import { fixedSchedule, daySchedule } from "./plan.ts";
 
-export const connectorKind = z.enum(["gmail", "google-calendar"]);
+export const connectorKind = z.enum(["gmail", "google-calendar", "google-health"]);
 export type ConnectorKind = z.infer<typeof connectorKind>;
+export const connectorLabels: Record<ConnectorKind, string> = {
+  gmail: "Gmail",
+  "google-calendar": "Google Calendar",
+  "google-health": "Google Health (Fitbit)",
+};
+
+export interface RecordedWorkout {
+  id: string;
+  activity: string;
+  start: string;
+  minutes: number;
+  elapsedMinutes: number;
+  km: number | null;
+  running: boolean;
+}
+
+export interface WorkoutSource {
+  workouts(from: string, to: string, page?: string): Promise<{
+    workouts: RecordedWorkout[];
+    nextPage?: string;
+  }>;
+}
+
 export const directions = z.strictObject({ importEvents: z.boolean(), exportEvents: z.boolean() });
 export type Directions = z.infer<typeof directions>;
 export const connectorStatus = z.object({
   configured: z.boolean(),
   account: z.string().nullable(),
   directions: directions,
+  mailSuggestions: z.boolean().optional(),
   lastSync: z.number().nullable(),
   error: z.string().nullable(),
 });
@@ -34,6 +58,7 @@ export interface Email {
     since: number,
     page?: string,
   ): Promise<{ messages: ReceivedEmail[]; nextPage?: string }>;
+  excerpt?(id: string): Promise<{subject:string; snippet:string; receivedAt:number} | null>;
   stop(): Promise<void>;
 }
 export type EmailReceiver = (mailbox: string, message: ReceivedEmail) => Promise<void>;

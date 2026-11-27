@@ -1,11 +1,15 @@
+import { currentAgents, notebookReturnHref, openAgents, returnToNotebook } from "./agents-navigation.ts";
+import { AgentsWorkspaceView } from "./agents-workspace.tsx";
+import { LazyChatbar } from "./lazy-chatbar.tsx";
 import { NotebookNavigation } from "./commands.ts";
-import { selectChat, useChats } from "./chats.ts";
+import { selectChat, newSideChat, captureChatTask, useChats, chatClient } from "./chats.ts";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "./query.ts";
-import { StrictMode, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { Task } from "@2do/api/plan";
+import type { WorkspaceCommandEvent } from "./agent-workspace.ts";
+import { recoverDeviceSubmissions } from "./device-delivery.ts";
+import { queryClient, getVerifiedScope } from "./query.ts";
+import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
+import type { Plan, Task } from "@2do/api/plan";
 import { flushSync } from "react-dom";
-import { createRoot } from "react-dom/client";
 import {
   dayKey,
   formatDate,
@@ -19,7 +23,6 @@ import {
   type View,
 } from "./calendar.ts";
 import { MonthCalendar } from "./month-calendar.tsx";
-import { DayEditor } from "./day-editor.tsx";
 import { Sidebar } from "./sidebar.tsx";
 import {
   BookOpen,
@@ -32,24 +35,24 @@ import {
 } from "lucide-react";
 import { TaskList, type ListActions } from "./agenda.tsx";
 import { WorkspaceCommands, type CommandScope } from "./workspace-commands.tsx";
-import { ReviewPanel, usePendingReview } from "./review-inbox.tsx";
-import { Chatbar } from "./chatbar.tsx";
+import { useInboxCounts } from "./agent-inbox-api.ts";
 import { TaskInspector } from "./task-dialog.tsx";
 import { useWeekTaskHints } from "./task-summary-api.ts";
 import { WeekTaskHints } from "./task-hints.tsx";
 import { usePlannerKeys } from "./vim.ts";
-import { usePlan } from "./use-plan.ts";
-import "./style.css";
+import { planQuery, usePlan } from "./use-plan.ts";
 import { Settings } from "./settings.tsx";
 import { sections, type Section } from "./settings-sections.ts";
 import { useReportSettings } from "./plugin-report-api.ts";
 import type { Command, Preferences } from "./preferences.ts";
-import { subscribePreferenceChanges, usePreferences } from "./preference-store.ts";
 import { closeNotebookPanel, setActivePanel, useWorkspacePanels } from "./workspace-panels.ts";
 
+const DayEditor = lazy(() => import("./day-editor.tsx").then(m => ({ default: m.DayEditor })));
+
 function readLocation() {
-  const segment = window.location.pathname.split("/")[2];
-  const params = new URLSearchParams(window.location.search);
+  const url = new URL(currentAgents() ? notebookReturnHref() ?? "/app/week" : location.href, location.origin);
+  const segment = url.pathname.split("/")[2];
+  const params = url.searchParams;
   const settings = segment === "settings";
   const view = views.find((v) => v === (settings ? params.get("from") : segment)) ?? "week";
   const section = settings
@@ -60,56 +63,6 @@ function readLocation() {
   const selected = dayKey(date) === key ? date : new Date();
   const focused = view === "week" && params.get("focus") === "1";
   return { view, date: selected, section, focused };
-}
-
-function Landing() {
-  const scene = useRef<HTMLElement>(null);
-  const oStart = useRef<HTMLSpanElement>(null);
-
-  useLayoutEffect(() => {
-    const sceneNode = scene.current!;
-    const marker = oStart.current!;
-    const wordmark = marker.parentElement!;
-
-    window.scrollTo(0, 0);
-    function alignReveal() {
-      // The marker starts at the o and spans its x-height above the baseline.
-      // Layout offsets stay in the wordmark's initial, unscaled coordinates.
-      const oWidth = wordmark.offsetWidth - marker.offsetLeft;
-      const centerX = marker.offsetLeft + oWidth / 2 - wordmark.offsetWidth / 2;
-      const centerY = marker.offsetTop + marker.offsetHeight / 2 - wordmark.offsetHeight / 2;
-      sceneNode.style.setProperty("--landing-mask-start-x", `calc(50vw + ${centerX}px)`);
-      sceneNode.style.setProperty("--landing-mask-start-y", `calc(50svh + ${centerY}px)`);
-      // Extend the photo under the stroke so the glyph defines the visible edge.
-      sceneNode.style.setProperty("--landing-mask-start-rx", `${oWidth * 0.36}px`);
-      sceneNode.style.setProperty("--landing-mask-start-ry", `${marker.offsetHeight * 0.49}px`);
-    }
-
-    alignReveal();
-    const observer = new ResizeObserver(alignReveal);
-    observer.observe(wordmark);
-    observer.observe(marker);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <main className="landing">
-      <div className="landing-scroll" aria-hidden="true" />
-      <section className="landing-scene" aria-label="twodo" ref={scene}>
-        <div className="landing-image-reveal" aria-hidden="true">
-          <img src="/coast-sheep.jpg" alt="" fetchPriority="high" />
-        </div>
-        <a className="landing-brand" href="/" aria-label="twodo home">
-          <span className="landing-wordmark">
-            twod<span className="landing-o-start" ref={oStart} aria-hidden="true" />o
-          </span>
-        </a>
-        <a className="landing-signin" href="/app">
-          Sign in
-        </a>
-      </section>
-    </main>
-  );
 }
 
 type Go = (view: View, date: Date, focused?: boolean) => void;
@@ -207,9 +160,8 @@ function Notebook({
   openSettings: (section: Section) => void;
 }) {
   const loose = actions?.plan.tasks.filter((t) => !t.schedule) ?? [];
-  const [showLoose, setShowLoose] = useState(false);
-  const week = view === "week" && actions;
-  const hints = useWeekTaskHints(week ? days : [], week ? week.plan.tasks : [], !focused && showLoose);
+  const [showLoose, setShowLoose] = useState(true);
+  const hints = useWeekTaskHints(view === "week" ? days : [], actions?.plan.tasks ?? [], !focused && showLoose);
   const notebook = (
     <main className="notebook-main" tabIndex={-1}>
       <NotebookHeader view={view} focused={focused} shift={shift} commands={commands} inspect={inspect} inspectorOpen={inspectorOpen} today={() => go(view, new Date(), focused)} />
@@ -223,6 +175,7 @@ function Notebook({
             openWeek={() => go("week", date)} openSettings={openSettings} />
         ) : (
           <WeekTaskHints hints={hints}>
+            <Suspense fallback={<p role="status">Opening day editors…</p>}>
             {days.map((day) => (
               <DayEditor
                 key={dayKey(day)}
@@ -237,6 +190,7 @@ function Notebook({
                 {...actions}
               />
             ))}
+            </Suspense>
             {!focused && loose.length > 0 && (
               <details className="unscheduled" open={showLoose} onToggle={(e) => setShowLoose(e.currentTarget.open)}>
                 <summary>Unscheduled · {loose.length}</summary>
@@ -251,6 +205,67 @@ function Notebook({
   return <>{notebook}{renderFooter(hints.status)}</>;
 }
 
+function focusedEditorMode() {
+  const active = document.activeElement;
+  if (active?.matches("[data-inline-title]")) return "Insert";
+  return active?.closest<HTMLElement>(".writing-surface")?.dataset.mode ?? "Normal";
+}
+
+function PlannerStatus({ prefs, dateKey, section, view, hintStatus, openNotebookChat, openSettings }: {
+  prefs: Preferences;
+  dateKey: string;
+  section: Section | null;
+  view: View;
+  hintStatus: string;
+  openNotebookChat: () => void;
+  openSettings: (section: Section) => void;
+}) {
+  const [editorMode, setEditorMode] = useState(focusedEditorMode);
+  useEffect(() => {
+    const modeChanged = (event: Event) => setEditorMode((event as CustomEvent<string>).detail);
+    const focusChanged = () => setEditorMode(focusedEditorMode());
+    window.addEventListener("notebook-mode", modeChanged);
+    window.addEventListener("focusin", focusChanged);
+    return () => {
+      window.removeEventListener("notebook-mode", modeChanged);
+      window.removeEventListener("focusin", focusChanged);
+    };
+  }, []);
+  const mode = prefs.keysEnabled ? editorMode : "Editing";
+  let keys = "/ commands";
+  if (section) keys = "Settings";
+  else if (view === "calendar") keys = prefs.keysEnabled ? "h j k l move" : "Month calendar";
+  else if (mode === "Insert") keys = "/ commands · Esc normal";
+  else if (mode === "Normal") keys = "j/k move · o capture · e details";
+  return (
+    <footer className="planner-status" aria-label="Workspace status">
+      <strong className="mode-indicator" data-mode={mode}>
+        {mode}
+      </strong>
+      <time dateTime={dateKey}>{dateKey}</time>
+      <LocalClock />
+      <span className="status-keys">{keys}</span>
+      <span className="status-state" role="status"><i />{hintStatus}</span>
+      <button type="button" data-chat-launch onClick={openNotebookChat}><Sparkles size={12}/> Quick chat
+        {prefs.keysEnabled && <kbd>g {prefs.bindings.copilot}</kbd>}
+      </button>
+      <button type="button" onClick={() => openSettings("goals")}>Goals</button>
+      <button type="button" onClick={() => openSettings("keybinds")}><Keyboard size={13}/> Keymap</button>
+    </footer>
+  );
+}
+
+function openRequestedTask(taskId: string | undefined, cached: Plan | undefined, open: (id: string) => void) {
+  if (!taskId) return false;
+  const requestedAt = location.href;
+  const inspect = (plan: Plan) => {
+    if (location.href !== requestedAt || !plan.tasks.some(task => task.id === taskId)) return false;
+    open(taskId);
+    return true;
+  };
+  return cached ? inspect(cached) : queryClient.fetchQuery(planQuery).then(inspect);
+}
+
 function PlannerView({
   prefs,
   change,
@@ -259,14 +274,17 @@ function PlannerView({
   change: (patch: Partial<Preferences>) => void;
 }) {
   const [{ view, date, section, focused }, setLocation] = useState(readLocation);
+  const agents=currentAgents();
   useReportSettings();
-  const { data, error, busy, mutate } = usePlan();
-  const settingsOpen = section !== null;
-  const pendingReview = usePendingReview();
+  const settingsOpen = !agents && section !== null;
+  const inboxCounts = useInboxCounts();
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get("inbox");
+    if (target) openAgents({page:"item",id:target},true);
+  }, []);
   const panel = useWorkspacePanels((s) => s.activePanel);
-  const reviewOrigin = useRef<HTMLElement | null>(null);
   const [palette, setPalette] = useState<CommandScope | null>(null);
-  const [editorMode, setEditorMode] = useState("Normal");
+  const { data, error, busy, mutate } = usePlan(!agents || !!palette || panel?.kind === "task");
   const captureTarget = useRef<string | null>(null);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -276,20 +294,8 @@ function PlannerView({
       event.preventDefault();
       setPalette((current) => current ? null : "commands");
     };
-    const modeChanged = (event: Event) => setEditorMode((event as CustomEvent<string>).detail);
-    const focusChanged = (event: FocusEvent) => {
-      if (!(event.target instanceof Element)) return;
-      if (event.target.matches("[data-inline-title]")) setEditorMode("Insert");
-      else setEditorMode(event.target.closest<HTMLElement>(".writing-surface")?.dataset.mode ?? "Normal");
-    };
     window.addEventListener("keydown", shortcut);
-    window.addEventListener("notebook-mode", modeChanged);
-    window.addEventListener("focusin", focusChanged);
-    return () => {
-      window.removeEventListener("keydown", shortcut);
-      window.removeEventListener("notebook-mode", modeChanged);
-      window.removeEventListener("focusin", focusChanged);
-    };
+    return () => window.removeEventListener("keydown", shortcut);
   }, []);
   const days = view === "week" && !focused ? weekDays(date, prefs.weekStart) : [date];
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
@@ -300,7 +306,7 @@ function PlannerView({
     const pop = () => {
       setFocusTarget(null);
       setLocation(readLocation());
-      closeNotebookPanel();
+      if(currentAgents()) setActivePanel(null);else closeNotebookPanel();
     };
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
@@ -336,6 +342,7 @@ function PlannerView({
     setLocation({ view, date, section: nextSection, focused });
   }
   function runCommand(command: Command) {
+    if (command === "agents") return openAgents();
     if (command === "settings") return openSettings();
     if (command === "today") return go(view, new Date(), focused);
     if (command === "nextDay" || command === "nextWeek" || command === "nextMonth") {
@@ -352,11 +359,14 @@ function PlannerView({
       go(view, target, focused, true);
       return;
     }
-    if (command === "copilot") {
-      selectChat(useChats.getState().selected);
-      return;
-    }
+    if (command === "copilot") return openNotebookChat();
     go(command, date, false, true);
+  }
+  function openNotebookChat() {
+    const task = document.activeElement?.closest<HTMLElement>("[data-task], .embedded.taskRef");
+    captureChatTask(panel?.kind === "task" ? panel.id : task?.dataset.task ?? task?.dataset.id);
+    if (agents) returnToNotebook(() => go(view, date, focused));
+    selectChat(useChats.getState().selected);
   }
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -391,21 +401,6 @@ function PlannerView({
     if (target?.matches(".ProseMirror")) target.dispatchEvent(new Event("notebook-refocus"));
     else target?.focus({ preventScroll: true });
   }
-  function closeReviewer() {
-    setActivePanel(null);
-    requestAnimationFrame(() => {
-      if (useWorkspacePanels.getState().activePanel) return;
-      const origin = reviewOrigin.current;
-      const target = origin?.isConnected && origin.getClientRects().length ? origin : document.querySelector<HTMLElement>("main");
-      target?.focus({ preventScroll: true });
-    });
-  }
-  function showReviewer() {
-    if (panel?.kind === "review") return closeReviewer();
-    const active = document.activeElement;
-    reviewOrigin.current = active instanceof HTMLElement && active !== document.body ? active : null;
-    setActivePanel({ kind: "review" });
-  }
   function inspectTask(id: string, graph: boolean) {
     flushSync(() => setActivePanel({ kind: "task", id, graph }));
     document.getElementById("task-inspector")?.focus({ preventScroll: true });
@@ -415,11 +410,62 @@ function PlannerView({
     origin.current = active instanceof HTMLElement && active !== document.body ? active : null;
     inspectTask(id, showGraph);
   }
+  function startCapture() {
+    captureTarget.current = dateKey;
+    go("week", date, view === "week" && focused, true);
+  }
+  const plannerScope = getVerifiedScope();
+  useEffect(() => {
+    if (!plannerScope) return;
+    const recover = () => { void recoverDeviceSubmissions(plannerScope,chatClient).catch(()=>{}); };
+    recover();
+    const interval = window.setInterval(recover,30_000);
+    window.addEventListener("online",recover);
+    return () => {window.clearInterval(interval);window.removeEventListener("online",recover);};
+  },[plannerScope]);
+  const onDeviceCommand = useEffectEvent(({detail:{action, reply}}:WorkspaceCommandEvent) => {
+    switch (action.command) {
+      case "graph":
+      case "inspectTask":
+        reply(openRequestedTask(action.taskId, data, (taskId) => {
+          if (section || agents) go(view, date, focused);
+          openTask(taskId, action.command === "graph");
+        }));
+        return;
+      case "openConnection": openSettings("connections"); break;
+      case "appearance": openSettings("appearance"); break;
+      case "settings": openSettings(action.section); break;
+      case "inbox": openAgents(action.itemId?{page:"item",id:action.itemId,action:action.inboxAction}:{page:"attention"}); break;
+      case "gmailSuggestions":
+        openSettings("connections");
+        requestAnimationFrame(() => {
+          const control = document.getElementById("gmail-suggestions") ?? document.getElementById("connection-gmail");
+          control?.scrollIntoView({block:"center"});
+          control?.focus({preventScroll:true});
+        }); break;
+      case "newChat": newSideChat(); break;
+      case "switchChat":
+        if (!action.chatId || (action.chatId !== "me" && !queryClient.getQueryData<ReadonlyArray<{id:string}>>(["chats"])?.some(c => c.id === action.chatId))) {reply(false);return;}
+        selectChat(action.chatId); break;
+      case "commands": setPalette("commands"); break;
+      case "capture": startCapture(); break;
+      case "week":
+      case "calendar": go(action.command, action.date ? new Date(action.date + "T00:00:00") : date); break;
+      case "editSelection": case "undoDraft": case "redoDraft": reply(false); return;
+      default: runCommand(action.command);
+    }
+    reply(true);
+  });
+  useEffect(() => {
+    const onCommand = (event:Event) => onDeviceCommand(event as WorkspaceCommandEvent);
+    window.addEventListener("agent-workspace-command",onCommand);
+    return () => window.removeEventListener("agent-workspace-command",onCommand);
+  },[]);
   usePlannerKeys({
     selectedDay: dateKey,
     deleteTask: (id) => { void mutate.deleteTask(id); },
     inspect: openTask,
-    enabled: prefs.keysEnabled,
+    enabled: prefs.keysEnabled && !agents,
     bindings: prefs.bindings,
     command: runCommand,
     shift: (by) => {
@@ -441,8 +487,7 @@ function PlannerView({
 
   function renderPanel() {
     switch (panel?.kind) {
-      case "chat": return <Chatbar />;
-      case "review": return <ReviewPanel close={closeReviewer} />;
+      case "chat": return <LazyChatbar />;
       case "task":
         if (section || !current || !data) return null;
         return (
@@ -466,43 +511,19 @@ function PlannerView({
   }
 
   function renderFooter(hintStatus: string) {
-    return (
-      <footer className="planner-status" aria-label="Workspace status">
-        <strong className="mode-indicator" data-mode={prefs.keysEnabled ? editorMode : "Editing"}>
-          {prefs.keysEnabled ? editorMode : "Editing"}
-        </strong>
-        <time dateTime={dateKey}>{dateKey}</time>
-        <LocalClock />
-        <span className="status-keys">{section ? "Settings" : view === "calendar"
-          ? prefs.keysEnabled ? "h j k l move" : "Month calendar"
-          : prefs.keysEnabled ? editorMode === "Insert" ? "/ commands · Esc normal" : "j/k move · o capture · e details" : "/ commands"}</span>
-        <span className="status-state" role="status"><i />{hintStatus}</span>
-        <button type="button" data-chat-launch onClick={() => runCommand("copilot")}><Sparkles size={12}/> Agent</button>
-        <button type="button" onClick={() => openSettings("goals")}>Goals</button>
-        <button type="button" onClick={() => openSettings("keybinds")}><Keyboard size={13}/> Keymap</button>
-      </footer>
-    );
+    return <PlannerStatus prefs={prefs} dateKey={dateKey} section={section} view={view} hintStatus={hintStatus}
+      openNotebookChat={openNotebookChat} openSettings={openSettings} />;
   }
 
-  return (
-    <NotebookNavigation.Provider value={{go:runCommand, help:() => openSettings("keybinds")}}>
-      <Sidebar
-        view={view}
-        date={date}
-        days={days}
-        go={go}
-        settings={settingsOpen}
-        settingsHref={settingsHref("appearance")}
-        openSettings={() => openSettings()}
-        reviewOpen={panel?.kind === "review"} pendingReview={pendingReview.data?.length ?? 0} review={showReviewer}
-        prefs={prefs}
-      />
-      {section ? (
+  function renderWorkspace() {
+    if (agents) return <AgentsWorkspaceView route={agents} runCommand={runCommand} />;
+    if (section) return (
         <>
           <Settings section={section} navigate={openSettings} prefs={prefs} change={change} />
           {renderFooter("Ready")}
         </>
-      ) : (
+    );
+    return (
         <Notebook
           view={view}
           date={date}
@@ -529,47 +550,31 @@ function PlannerView({
           go={go}
           shift={shift}
         />
-      )}
+    );
+  }
+
+  return (
+    <NotebookNavigation.Provider value={{go:runCommand, help:() => openSettings("keybinds")}}>
+      <Sidebar
+        view={view}
+        date={date}
+        days={days}
+        go={go}
+        settings={settingsOpen}
+        settingsHref={settingsHref("appearance")}
+        openSettings={() => openSettings()}
+        pendingReview={inboxCounts.data?.needsAction ?? 0} agents={agents}
+        prefs={prefs}
+      />
+      {renderWorkspace()}
       {renderPanel()}
-      {palette && <WorkspaceCommands scope={palette} review={showReviewer} prefs={prefs} tasks={data?.tasks ?? []}
+      {palette && <WorkspaceCommands scope={palette} review={()=>openAgents({page:"attention"})} prefs={prefs} tasks={data?.tasks ?? []}
         close={() => setPalette(null)} run={runCommand} help={() => openSettings("keybinds")}
-        capture={() => {
-          captureTarget.current = dateKey;
-          go("week", date, view === "week" && focused, true);
-        }}
+        capture={startCapture}
         inspect={(task) => actions?.open(task)} />}
     </NotebookNavigation.Provider>
   );
 }
-function applyAppearance({ theme, mode }: Preferences) {
-  const root = document.documentElement;
-  root.dataset.palette = theme;
-  root.dataset.mode = mode;
-  const color = getComputedStyle(root).backgroundColor;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", color);
+export default function Planner(props: Parameters<typeof PlannerView>[0]) {
+  return <QueryClientProvider client={queryClient}><PlannerView {...props} /></QueryClientProvider>;
 }
-
-applyAppearance(usePreferences.getState());
-
-function App() {
-  const prefs = usePreferences();
-  useEffect(subscribePreferenceChanges, []);
-  useLayoutEffect(() => {
-    const update = () => applyAppearance(prefs);
-    update();
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, [prefs]);
-  const path = window.location.pathname.replace(/\/$/, "");
-  return ["/app", "/app/day", "/app/week", "/app/calendar", "/app/settings"].includes(path) ? (
-    <PlannerView prefs={prefs} change={usePreferences.setState} />
-  ) : (
-    <Landing />
-  );
-}
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}><App /></QueryClientProvider>
-  </StrictMode>,
-);

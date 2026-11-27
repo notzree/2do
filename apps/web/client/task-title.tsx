@@ -1,7 +1,7 @@
 import { useRef, useState, type ButtonHTMLAttributes } from "react";
 import { flushSync } from "react-dom";
 import type { Task } from "@2do/api/plan";
-import { focusTaskTitle } from "./editor-navigation.ts";
+import { focusTaskTitle } from "./notebook-focus.ts";
 import type { TitleCaret } from "./commands.ts";
 import type { Mutate } from "./use-plan.ts";
 

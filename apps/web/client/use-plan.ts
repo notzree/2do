@@ -1,6 +1,6 @@
 import { taskObservationsHeader } from "@2do/api/plugin-reports";
 import { refreshPlannerChange, type PlannerChange } from "./planner-cache.ts";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { plan } from "@2do/api/plan";
 import type { components } from "./openapi.d.ts";
@@ -11,21 +11,28 @@ export type Mutate = ReturnType<typeof usePlan>["mutate"];
 
 type Write = { change: PlannerChange; execute: () => Promise<{ response: Response } | void> };
 
-export function usePlan() {
+export const planQuery = queryOptions({
+	queryKey: planKey,
+	queryFn: async ({ signal }) => plan.parse((await api.GET("/api/tasks", { signal })).data),
+});
+
+export function usePlan(enabled = true) {
 	const client = useQueryClient();
 	const pendingDeletes = useRef(new Map<string, Promise<boolean>>());
-	const query = useQuery({
-		queryKey: planKey,
-		queryFn: async ({ signal }) => plan.parse((await api.GET("/api/tasks", { signal })).data),
-	});
+	const query = useQuery({ ...planQuery, enabled });
 	useQuery({
 		queryKey: ["planner", "revision"],
-		enabled: !!query.data,
+		enabled: enabled && !!query.data,
 		refetchInterval: 60_000,
 		queryFn: async ({ signal }) => {
 			const { data } = await api.GET("/api/plan/revision", { signal });
 			const cached = client.getQueryData<typeof query.data>(planKey);
-			if (data && cached && data.revision > cached.revision) await client.invalidateQueries({ queryKey: planKey });
+			if (data && cached && data.revision > cached.revision) {
+        await Promise.all([
+          client.invalidateQueries({ queryKey: planKey }),
+          client.invalidateQueries({ queryKey: ["planner", "reports"] }),
+        ]);
+      }
 			return data?.revision ?? 0;
 		},
 	});

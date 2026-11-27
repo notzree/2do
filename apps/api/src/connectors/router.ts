@@ -5,7 +5,7 @@ import { identify } from "../access.ts";
 import { verifiedGoogleIdentity } from "./auth.ts";
 import type { ConnectorEnv } from "./connection.ts";
 import { plannerApi } from "../routes/planner-api.ts";
-import { connectionOperations as ops } from "../routes/connections.ts";
+import { connectionOperations as ops, connectionGuideResult } from "../routes/connections.ts";
 import { plannerScopeHeader } from "../interfaces/notebook.ts";
 import type { ConnectorKind } from "../interfaces/connectors.ts";
 import { bodyLimit } from "hono/body-limit";
@@ -88,13 +88,21 @@ function connection(c: import("hono").Context<Context>, kind: ConnectorKind) {
 function planner(c: import("hono").Context<Context>) {
   return c.env.USER_PLANNER.get(c.env.USER_PLANNER.idFromString(c.get("owner")));
 }
+connectors.openapi(ops.guide,async c=>c.json(connectionGuideResult.parse(await planner(c).startConnectionGuide(crypto.randomUUID(),c.req.valid("json"))),200));
 connectors.openapi(ops.status, async (c) => {
   const { kind } = c.req.valid("param");
   return c.json(await connection(c, kind).status(kind), 200);
 });
 connectors.openapi(ops.begin, async (c) => {
   const { kind } = c.req.valid("param");
-  const result = await connection(c, kind).begin(c.get("owner"), kind, c.req.valid("json"));
+  const body = c.req.valid("json");
+  if (kind === "google-calendar" && !("importEvents" in body))
+    throw new HTTPException(400, { message: "Choose your calendar sync directions." });
+  const options = {
+    importEvents: kind === "google-calendar" && body.importEvents === true,
+    exportEvents: kind === "google-calendar" && body.exportEvents === true,
+  };
+  const result = await connection(c, kind).begin(c.get("owner"), kind, options);
   if ("error" in result) throw new HTTPException(result.status, { message: result.error });
   return c.json({ url: result.url }, 200);
 });
@@ -107,6 +115,13 @@ connectors.openapi(ops.callback, async (c) => {
     new URL("/app/settings?section=connections", c.env.GOOGLE_CONNECTOR_ORIGIN).href,
     303,
   );
+});
+connectors.openapi(ops.recentWorkouts, async (c) => c.json(await planner(c).recentWearableWorkouts(), 200));
+connectors.openapi(ops.mailSuggestions, async (c) => {
+  const {enabled} = c.req.valid("json");
+  if (!(await connection(c, "gmail").setMailSuggestions(enabled)))
+    return c.json({error:"Connect Gmail first."}, 409);
+  return c.json({enabled}, 200);
 });
 connectors.openapi(ops.options, async (c) =>
   c.json({ authorized: await connection(c, "google-calendar").options(c.req.valid("json")) }, 200),

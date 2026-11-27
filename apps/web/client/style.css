@@ -672,7 +672,7 @@ button.embed-title{text-align:left;padding:.05rem 0;line-height:1.5}
 	.page-heading{margin-bottom:1.6rem}
 }
 
-::selection { background: color-mix(in srgb, var(--accent) 32%, var(--paper)); color: var(--ink); }
+::selection, .task-title-editor > input::selection { background: color-mix(in srgb, var(--accent) 32%, var(--paper)); color: var(--ink); }
 input { accent-color: var(--accent); }
 .side-bottom .settings-link { display: flex; gap: .65rem; align-items: center; padding: .55rem .7rem; border-radius: .45rem; color: var(--muted); font-size: .875rem; }
 .settings-link:hover, .settings-link[aria-current] { background: var(--soft); color: var(--ink); }
@@ -805,8 +805,9 @@ input { accent-color: var(--accent); }
 .week-meta i { font-style: normal; }
 .day-sheet { margin-bottom: 1.6rem; scroll-margin-top: calc(var(--notebook-toolbar-height) + .6rem); }
 .day-line { gap: .65rem; margin: 0 0 .45rem; }
-.day-line h2 { font: 400 1.42rem/1.25 "Baskervville", Georgia, serif; letter-spacing: -.032em; }
-.day-line time, .day-line .today-dot { font: .65rem/1.4 var(--notebook-mono); }
+.day-line h2 { font: 550 1.42rem/1.25 "DM Sans", system-ui, sans-serif; letter-spacing: normal; }
+.day-line time { font: .83rem/1.4 "DM Sans", system-ui, sans-serif; }
+.day-line .today-dot { font: .65rem/1.4 var(--notebook-mono); }
 .day-line .focus-day { min-height: 1.65rem; padding: .14rem .25rem; }
 .day-line .today-dot { color: var(--accent); }
 .day-sheet .writing-surface { padding-bottom: .1rem; }
@@ -817,6 +818,8 @@ input { accent-color: var(--accent); }
 .task-title-editor > input[data-inline-title] {
 	display: block; position: relative; width: 100%; min-width: 0; margin: 0; padding: 0;
 	font: inherit; line-height: 1.5; color: var(--ink); background: var(--paper);
+	/* The title owns its text caret while ProseMirror hides the selected block's caret. */
+	caret-color: currentColor; caret-shape: bar;
 	border: 0; border-radius: .15rem; accent-color: auto;
 }
 .hint-heading > .task-title-editor { font-size: .99rem; }
@@ -879,12 +882,13 @@ input { accent-color: var(--accent); }
 	.notebook-top .commands-trigger span { display: none; }
 	.tool-divider { margin-inline: .13rem; }
 }
-.notebook-side .review-link {
-	display: flex; align-items: center; gap: .65rem; width: 100%; min-height: 2.25rem;
-	border: 0; border-radius: .32rem; padding: .55rem .7rem; background: transparent;
-	color: var(--muted); font-size: .83rem; text-align: left;
-}
-.notebook-side .review-link:hover, .notebook-side .review-link[aria-pressed=true] { color: var(--ink); background: var(--soft); }
-.review-link span { margin-left: auto; color: var(--warn); font: .7rem var(--notebook-mono); }
+.recent-heading { display: flex; align-items: center; justify-content: space-between; }
+.recent-heading h2 { margin-block: 0; }
+.recent-heading button { width: auto; padding: .35rem; }
+.recent-chats a { display: flex; align-items: center; gap: .5rem; border-radius: .32rem; padding: .42rem .7rem; color: var(--muted); font-size: .83rem; }
+.recent-chats a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-chats a svg, .recent-heading button svg { flex: none; margin: 0; opacity: 1; }
+.recent-chats a:hover, .recent-chats a[aria-current] { background: var(--soft); color: var(--ink); }
+.notebook-side nav small { color: var(--warn); font: .7rem var(--notebook-mono); }
 .status-clock { font-variant-numeric: tabular-nums; }
 @media (max-width: 44rem) { .status-clock { display: none; } }

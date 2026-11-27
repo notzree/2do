@@ -1,5 +1,798 @@
 [
   {
+    "name": "linkWorkspaceItem",
+    "description": "Link a workspace item by ID into the current conversation. Pass current as id.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "me"
+              ]
+            },
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "current"
+              ]
+            }
+          ]
+        },
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      },
+      "required": [
+        "id",
+        "itemId"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/chats/{id}/items/{itemId}"
+  },
+  {
+    "name": "searchConversationContext",
+    "description": "Search message text in conversations explicitly referenced by this turn and cite matching chat and message IDs",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "chat": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "me"
+              ]
+            },
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "active-sides"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "q"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/agents/context",
+    "queryParameters": [
+      "q",
+      "chat"
+    ]
+  },
+  {
+    "name": "proposeChanges",
+    "description": "Group interdependent local planner writes in one atomic change. Use generated planner tool names and arguments in steps.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "args": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "operation",
+                  "args"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 16
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "reason",
+            "steps"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/agent/changes",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "listAgentInbox",
+    "description": "Search workspace-wide proposals, questions and updates. Use view=action and kind=proposal for all active proposals across chats; q searches their saved details. Follow nextCursor.",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": [
+            "all",
+            "action",
+            "updates"
+          ],
+          "default": "all"
+        },
+        "chat": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "me"
+              ]
+            },
+            {
+              "type": "string",
+              "format": "uuid"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "proposal",
+            "question",
+            "notification"
+          ]
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "cursor": {
+          "type": "string",
+          "pattern": "^\\d+$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 30
+        }
+      }
+    },
+    "method": "get",
+    "pathTemplate": "/api/agent/inbox",
+    "queryParameters": [
+      "view",
+      "chat",
+      "kind",
+      "q",
+      "cursor",
+      "limit"
+    ]
+  },
+  {
+    "name": "readAgentInboxItem",
+    "description": "Executes GET /api/agent/inbox/{id}",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/agent/inbox/{id}"
+  },
+  {
+    "name": "askUser",
+    "description": "Ask the user a durable question with optional choices in this conversation. End this turn after publishing.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Optional stable ID for replay"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "body": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "taskId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "choices": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "maxItems": 12,
+              "default": []
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/agent/questions",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "notifyUser",
+    "description": "Publish an informational inbox item. No answer is required.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Optional stable ID for replay"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "body": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "taskId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/agent/notifications",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "listReminders",
+    "description": "List reminder rules, delivery settings and their next wakeup",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "method": "get",
+    "pathTemplate": "/api/reminders"
+  },
+  {
+    "name": "setReminderSettings",
+    "description": "Set notification timezone, pause, date-only time and quiet hours",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "timeZone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "dayTime": {
+              "type": "string",
+              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+            },
+            "quietStart": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+            },
+            "quietEnd": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+            }
+          },
+          "required": [
+            "timeZone",
+            "paused",
+            "dayTime",
+            "quietStart",
+            "quietEnd"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/reminders/settings",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "setReminder",
+    "description": "Create or replace an absolute, task-relative, daily briefing or planner-wide due reminder rule by stable ID",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "taskId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "trigger": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "at"
+                      ]
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "before"
+                      ]
+                    },
+                    "anchor": {
+                      "type": "string",
+                      "enum": [
+                        "start",
+                        "due"
+                      ]
+                    },
+                    "minutes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 43200
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "anchor",
+                    "minutes"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "due-tasks"
+                      ]
+                    },
+                    "minutes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 43200
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "minutes"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "routine"
+                      ]
+                    },
+                    "time": {
+                      "type": "string",
+                      "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                    },
+                    "instruction": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "time",
+                    "instruction"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "daily"
+                      ]
+                    },
+                    "time": {
+                      "type": "string",
+                      "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                    },
+                    "summary": {
+                      "type": "string",
+                      "enum": [
+                        "agenda",
+                        "blocked"
+                      ]
+                    },
+                    "synthesize": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "time",
+                    "summary"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "title",
+            "trigger",
+            "enabled"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/reminders/{id}",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "deleteReminder",
+    "description": "Cancel a reminder and pending deliveries",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "method": "delete",
+    "pathTemplate": "/api/reminders/{id}"
+  },
+  {
+    "name": "snoozeReminder",
+    "description": "Snooze one delivered occurrence by its inbox notification ID",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "occurrence": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10080
+            }
+          },
+          "required": [
+            "occurrence",
+            "minutes"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/reminders/{id}/snooze",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "dismissReminder",
+    "description": "Dismiss one reminder occurrence by its inbox notification ID",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "occurrence": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "occurrence"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/reminders/{id}/dismiss",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "getReportSettings",
+    "description": "Read the planner reporting time zone",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "method": "get",
+    "pathTemplate": "/api/report-settings"
+  },
+  {
+    "name": "setReportSettings",
+    "description": "Set the reporting time zone; onlyIfUnset initializes it on the first device",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "timeZone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "onlyIfUnset": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "timeZone"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/report-settings",
+    "requestBodyContentType": "application/json"
+  },
+  {
     "name": "listPluginMetrics",
     "description": "List metrics contributed by enabled plugins",
     "annotations": {
@@ -81,6 +874,237 @@
     },
     "method": "get",
     "pathTemplate": "/api/goals"
+  },
+  {
+    "name": "createGoal",
+    "description": "Create a daily goal for an enabled plugin metric",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "metricId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}\\.[a-z][a-z0-9-]{0,63}$"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "effectiveFrom": {
+              "type": "string",
+              "format": "date"
+            },
+            "target": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "atLeast"
+                      ]
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "comparator",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "atMost"
+                      ]
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "comparator",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "between"
+                      ]
+                    },
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "comparator",
+                    "min",
+                    "max"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "metricId",
+            "label",
+            "effectiveFrom",
+            "target"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/goals",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "updateGoal",
+    "description": "Change a daily target or end the goal on the effective date",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "effectiveFrom": {
+              "type": "string",
+              "format": "date"
+            },
+            "target": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "atLeast"
+                      ]
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "comparator",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "atMost"
+                      ]
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "comparator",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "between"
+                      ]
+                    },
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "comparator",
+                    "min",
+                    "max"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "revision": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "effectiveFrom",
+            "target",
+            "revision"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/goals/{id}",
+    "requestBodyContentType": "application/json"
   },
   {
     "name": "readAllGoalHistory",
@@ -180,6 +1204,60 @@
     "queryParameters": [
       "timeZone"
     ]
+  },
+  {
+    "name": "readCarryoverSettings",
+    "description": "Read automatic carryover settings",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "method": "get",
+    "pathTemplate": "/api/settings/carryover"
+  },
+  {
+    "name": "setCarryoverSettings",
+    "description": "Configure daily carryover at 6 AM in the selected time zone",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "timeZone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": [
+            "enabled",
+            "timeZone"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/settings/carryover",
+    "requestBodyContentType": "application/json"
   },
   {
     "name": "listPlannerGoals",
@@ -653,6 +1731,151 @@
     "requestBodyContentType": "application/json"
   },
   {
+    "name": "listRecentDecisions",
+    "description": "Read the ten most recent decisions, newest first",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "method": "get",
+    "pathTemplate": "/api/review/recent"
+  },
+  {
+    "name": "readTaskSummaries",
+    "description": "Read plugin hints for a batch of notebook rows. Unknown tasks are omitted.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "minItems": 1,
+              "maxItems": 64
+            }
+          },
+          "required": [
+            "ids"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/tasks/summaries",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "setTaskPromptSkipped",
+    "description": "Skip or restore an eligible optional task hint",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "promptId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "skipped": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "skipped"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "promptId",
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/tasks/{id}/prompts/{promptId}",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "listChats",
+    "description": "List active side chats, or the full directory with archive and activity metadata",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": [
+            "directory"
+          ]
+        }
+      }
+    },
+    "method": "get",
+    "pathTemplate": "/api/chats",
+    "queryParameters": [
+      "view"
+    ]
+  },
+  {
+    "name": "readTaskCapture",
+    "description": "Read the original notebook input and capture context, or null if unavailable",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/tasks/{id}/capture"
+  },
+  {
     "name": "readPage",
     "description": "Read a day document",
     "annotations": {
@@ -945,6 +2168,61 @@
     "requestBodyContentType": "application/json"
   },
   {
+    "name": "reorderSubtasks",
+    "description": "Reorder direct subtasks. Supply every child ID in current agenda order and in the desired order.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "before": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "minItems": 1,
+              "maxItems": 500
+            },
+            "after": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "minItems": 1,
+              "maxItems": 500
+            }
+          },
+          "required": [
+            "before",
+            "after"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/tasks/{id}/subtask-order",
+    "requestBodyContentType": "application/json"
+  },
+  {
     "name": "runPluginAction",
     "description": "Run an available plugin command at its reviewed revisions. Repeat the command ID for safe replay.",
     "annotations": {
@@ -1021,6 +2299,30 @@
     "method": "post",
     "pathTemplate": "/api/tasks/{id}/subtypes/{typeId}/actions/{actionId}",
     "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "classifyTask",
+    "description": "Queue classification for an existing task or retry a failed check",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/tasks/{id}/classify"
   },
   {
     "name": "searchTasks",
@@ -1714,6 +3016,45 @@
     "pathTemplate": "/api/task-plugins"
   },
   {
+    "name": "setTaskPluginEnabled",
+    "description": "Enable or disable a task plugin for the signed-in user",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "pluginId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "pluginId",
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/task-plugins/{pluginId}",
+    "requestBodyContentType": "application/json"
+  },
+  {
     "name": "traverse",
     "description": "List unique transitive ancestors or descendants, excluding the starting task",
     "annotations": {
@@ -1815,6 +3156,229 @@
     "pathTemplate": "/api/dependencies/{from}/{to}",
     "queryParameters": [
       "expectedRevision"
+    ]
+  },
+  {
+    "name": "guideGoogleConnection",
+    "description": "Help connect Gmail, Google Calendar or Google Health (Fitbit); collect missing choices and consent through the user's inbox.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "google-calendar",
+                "google-health"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "post",
+    "pathTemplate": "/api/connections/guide",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "connectionStatus",
+    "description": "Executes GET /api/connections/{kind}",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "gmail",
+            "google-calendar",
+            "google-health"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/connections/{kind}"
+  },
+  {
+    "name": "disconnectProvider",
+    "description": "Executes DELETE /api/connections/{kind}",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "gmail",
+            "google-calendar",
+            "google-health"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "method": "delete",
+    "pathTemplate": "/api/connections/{kind}"
+  },
+  {
+    "name": "calendarSyncDirections",
+    "description": "Executes PUT /api/connections/google-calendar/options",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "importEvents": {
+              "type": "boolean"
+            },
+            "exportEvents": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "importEvents",
+            "exportEvents"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/connections/google-calendar/options",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "getCalendarLink",
+    "description": "Executes GET /api/events/{id}/calendar-link",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "method": "get",
+    "pathTemplate": "/api/events/{id}/calendar-link"
+  },
+  {
+    "name": "setCalendarLink",
+    "description": "Executes PUT /api/events/{id}/calendar-link",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "requestBody": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false,
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "id",
+        "requestBody"
+      ]
+    },
+    "method": "put",
+    "pathTemplate": "/api/events/{id}/calendar-link",
+    "requestBodyContentType": "application/json"
+  },
+  {
+    "name": "deletePublishedEvent",
+    "description": "Executes DELETE /api/events/{id}/calendar-link",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "method": "delete",
+    "pathTemplate": "/api/events/{id}/calendar-link",
+    "queryParameters": [
+      "revision"
     ]
   }
 ]

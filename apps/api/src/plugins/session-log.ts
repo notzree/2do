@@ -43,17 +43,21 @@ export function logWorkflow<T extends PluginData>(spec: {
   defaults(current: WorkflowSnapshot): Defaults;
   record(input: PluginData, current: WorkflowSnapshot): T;
   form(entry: T): Defaults;
+  properties?(entry: T | undefined): { label: string; value: string | null }[];
   measure(entry: T): MetricObservation[];
 }): PluginWorkflow<PluginData, { entry?: T }> {
   const clear = { id: "clear", label: "Remove log", fields: [] };
+  const summaryStatus = (state: { entry?: T }) => state.entry ? "Logged" : "Planned";
   return {
     version: 1,
     initial: {},
     schema: z.object({ entry: spec.schema.optional() }),
     commands: [spec.action, clear],
+    summaryStatus,
     describe(current, state) {
       return {
-        status: state.entry ? "Logged" : "Planned",
+        status: summaryStatus(state),
+        properties: spec.properties?.(state.entry),
         actions: [
           {
             id: spec.action.id,

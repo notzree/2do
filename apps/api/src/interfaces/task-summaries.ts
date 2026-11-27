@@ -9,7 +9,7 @@ export const taskSummary = z.strictObject({
   extracting: taskDetails.shape.extracting,
   classification: taskDetails.shape.classification,
   types: z.array(taskSubtype.pick({ typeId: true, source: true }).extend({
-    label: z.string(), icon: taskTypeIcon.optional(),
+    label: z.string(), icon: taskTypeIcon.optional(), status: z.string().optional(),
   })),
   inlays: z.array(
     z.strictObject({ typeId: z.string(), field: z.string(), label: z.string(), value: z.string() }),

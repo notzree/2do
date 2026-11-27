@@ -19,6 +19,7 @@ const dayParams = z.object({ date: z.iso.date() });
 export const notebookOperations = {
 	readTaskCapture: createRoute({
 		operationId: "readTaskCapture",
+		"x-mcp": true,
 		method: "get",
 		path: "/api/tasks/{id}/capture",
 		summary: "Read the original notebook input and capture context, or null if unavailable",

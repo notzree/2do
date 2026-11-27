@@ -1,3 +1,7 @@
+import { googleHealth } from "./google-health.ts";
+import { importWorkoutPage } from "./workout-intake.ts";
+import { gmailSource, mailCandidate } from "./mail-candidate.ts";
+import type { ReviewedConnectorCommand } from "./inbox-actions.ts";
 import { CalendarWatches } from "./calendar-watches.ts";
 import { DurableObject } from "cloudflare:workers";
 import { CalendarDestinationMissing } from "../interfaces/connectors.ts";
@@ -24,6 +28,7 @@ import { reconcileExport } from "../core/calendar-sync.ts";
 import type { UserPlanner } from "../user-planner.ts";
 
 export type ConnectorEnv = GoogleSecrets & {
+  AI?: Ai;
   USER_PLANNER: DurableObjectNamespace<UserPlanner>;
   GOOGLE_CONNECTION: DurableObjectNamespace<GoogleConnection>;
   GMAIL_DIRECTORY: DurableObjectNamespace<GmailDirectory>;
@@ -48,6 +53,8 @@ interface Grant {
   permissions: string[];
   options: Directions;
   installed: number;
+  generation?: string;
+  mailSuggestionsSince?: number;
   destination?: string;
   lastSync?: number;
   error?: string;
@@ -101,6 +108,7 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
       configured: configured(this.env, kind),
       account: grant?.email ?? null,
       directions: grant?.options ?? disabled,
+      ...(kind === "gmail" && { mailSuggestions: grant?.mailSuggestionsSince !== undefined }),
       lastSync: grant?.lastSync ?? null,
       error: grant?.error ?? null,
     };
@@ -155,9 +163,10 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
         email: identity.email,
         sub: identity.sub,
         installed: previous?.installed ?? Date.now(),
+        generation: crypto.randomUUID(),
         token,
         permissions,
-        options: p.options,
+        options: p.kind === "google-calendar" ? p.options : disabled,
         error: undefined,
         failures: 0,
         retryAt: undefined,
@@ -168,8 +177,10 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
       await this.ctx.storage.transaction(async (tx) => {
         this.kv.put("grant", grant);
         this.kv.delete("scan");
+        this.kv.delete("workout-scan");
         await tx.setAlarm(Date.now());
       });
+      await this.reportExportPermission(grant, grant.options.exportEvents);
       return null;
     });
   }
@@ -183,38 +194,52 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
     this.cachedAuth = { token: g.token, client };
     return client;
   }
+  private async reportExportPermission(g: Grant, enabled: boolean) {
+    if (g.kind === "google-calendar")
+      await this.env.USER_PLANNER.get(
+        this.env.USER_PLANNER.idFromString(g.planner),
+      ).setCalendarExportEnabled(g.sub, enabled);
+  }
   private cancelDeletions(g: Grant) {
     return this.env.USER_PLANNER.get(
       this.env.USER_PLANNER.idFromString(g.planner),
-    ).cancelCalendarDeletions();
+    ).cancelCalendarDeletions(g.sub);
   }
   options(options: Directions) {
-    return this.run(async () => {
-      const g = this.grant();
-      if (!g || !scopes("google-calendar", options).every((s) => g.permissions.includes(s)))
-        return false;
-      if (g.options.exportEvents && !options.exportEvents) await this.cancelDeletions(g);
-      await this.ctx.storage.transaction(async (tx) => {
-        this.kv.put("grant", { ...g, options });
-        this.kv.delete("scan");
-        await tx.setAlarm(Date.now());
-      });
-      return true;
+    return this.run(() => this.setDirections(options));
+  }
+  private async setDirections(options: Directions) {
+    const g = this.grant();
+    if (
+      !g ||
+      this.kv.get("closing") ||
+      !scopes("google-calendar", options).every((s) => g.permissions.includes(s))
+    )
+      return false;
+    if (g.options.exportEvents && !options.exportEvents) await this.cancelDeletions(g);
+    await this.ctx.storage.transaction(async (tx) => {
+      this.kv.put("grant", { ...g, options });
+      this.kv.delete("scan");
+      await tx.setAlarm(Date.now());
     });
+    await this.reportExportPermission(g, options.exportEvents);
+    return true;
   }
   disconnect() {
-    return this.run(async () => {
-      await this.ctx.storage.transaction(async (tx) => {
-        this.kv.put("closing", true);
-        this.kv.delete("pending");
-        await tx.setAlarm(Date.now() + minute);
-      });
-      await this.finishDisconnect();
+    return this.run(() => this.closeConnection());
+  }
+  private async closeConnection() {
+    await this.ctx.storage.transaction(async (tx) => {
+      this.kv.put("closing", true);
+      this.kv.delete("pending");
+      await tx.setAlarm(Date.now() + minute);
     });
+    await this.finishDisconnect();
   }
   private async finishDisconnect() {
     const g = this.grant();
     if (g?.kind === "google-calendar") {
+      await this.reportExportPermission(g, false);
       await this.cancelDeletions(g);
       try {
         const api = googleCalendar(await this.auth(g));
@@ -234,6 +259,8 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
         await directory.release(this.id);
       }
     }
+    if (g?.kind === "google-health")
+      await this.env.USER_PLANNER.get(this.env.USER_PLANNER.idFromString(g.planner)).clearWearableWorkouts(g.sub);
     this.cachedAuth = undefined;
     await this.ctx.storage.deleteAll();
   }
@@ -255,7 +282,16 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
       await tx.setAlarm(Math.max(Date.now(), g.retryAt ?? 0));
     });
   }
-  // Future agent delivery attaches here. The initial implementation retains message IDs only.
+  setMailSuggestions(enabled: boolean) {
+    return this.run(async () => {
+      const g = this.grant();
+      if (g?.kind !== "gmail" || this.kv.get("closing")) return false;
+      g.mailSuggestionsSince = enabled ? (g.mailSuggestionsSince ?? Date.now()) : undefined;
+      this.kv.put("grant", g);
+      return true;
+    });
+  }
+  // The ID-only receiver remains available independently of content analysis.
   protected receiveEmail: EmailReceiver = async () => {};
   private async mail(g: Grant, email: Email) {
     const directory = this.env.GMAIL_DIRECTORY.getByName(g.email);
@@ -274,6 +310,30 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
       async (mailbox, message) => {
         const key = "received:" + message.id;
         if (this.kv.get(key)) return;
+        if (g.mailSuggestionsSince !== undefined && email.excerpt && this.env.AI) {
+          const excerpt = await email.excerpt(message.id);
+          if (excerpt && excerpt.receivedAt >= g.mailSuggestionsSince) {
+            const candidate = await mailCandidate(this.env.AI, excerpt);
+            if (candidate) {
+              const planner = this.env.USER_PLANNER.get(
+                this.env.USER_PLANNER.idFromString(g.planner),
+              );
+              const id =
+                "gmail-" +
+                Buffer.from(
+                  await crypto.subtle.digest(
+                    "SHA-256",
+                    new TextEncoder().encode(JSON.stringify([g.sub, message.id])),
+                  ),
+                ).toString("hex");
+              await planner.proposeMailTask({
+                ...candidate,
+                id,
+                source: gmailSource(mailbox, message),
+              });
+            }
+          }
+        }
         await this.receiveEmail(mailbox, message);
         this.kv.put(key, true);
       },
@@ -336,7 +396,7 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
           } catch (e) {
             if (e instanceof CalendarDestinationMissing) {
               // The missing copy no longer proves its last version, so preserve the local event.
-              await planner.cancelCalendarDeletions();
+              await planner.cancelCalendarDeletions(g.sub);
               delete g.destination;
               this.kv.delete("scan");
               return 1;
@@ -376,14 +436,29 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
       let delay: number | null;
       try {
         const auth = await this.auth(g);
-        delay =
-          g.kind === "gmail"
-            ? await this.mail(g, gmailInbox(auth, this.env.GMAIL_PUBSUB_TOPIC!))
-            : await this.calendars(g, googleCalendar(auth));
-        g.error = undefined;
+        let paused = false;
+        switch (g.kind) {
+          case "gmail":
+            delay = await this.mail(g, gmailInbox(auth, this.env.GMAIL_PUBSUB_TOPIC!));
+            break;
+          case "google-calendar":
+            delay = await this.calendars(g, googleCalendar(auth));
+            break;
+          case "google-health": {
+            const planner = this.env.USER_PLANNER.get(this.env.USER_PLANNER.idFromString(g.planner));
+            const epoch = await planner.fitnessImportEpoch();
+            const result = epoch ? await importWorkoutPage(this.kv, googleHealth(auth), g.installed, epoch,
+              (scan, rows, complete) => planner.applyWorkoutPage(g.sub, epoch, scan, rows, complete)) : "paused";
+            paused = result === "paused";
+            delay = result === "continue" ? 1 : 15 * minute;
+            break;
+          }
+        }
+        await this.reportExportPermission(g, g.options.exportEvents);
+        g.error = paused ? "Enable Fitness in Settings → Plugins to import workouts." : undefined;
         g.failures = 0;
         g.retryAt = undefined;
-        if (delay !== 1) g.lastSync = Date.now();
+        if (!paused && delay !== 1) g.lastSync = Date.now();
       } catch (err) {
         g.failures = (g.failures ?? 0) + 1;
         const status = httpStatus(err);
@@ -396,8 +471,11 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
                   "invalid_grant"
               ? "Google access needs attention. Reconnect or check provider permissions."
               : "Sync interrupted. Retrying automatically.";
+        if (g.kind === "google-calendar" && g.error.startsWith("Google access needs attention"))
+          await this.reportExportPermission(g, false);
         if (g.kind === "google-calendar" && (status === 410 || status === 400))
           this.kv.delete("scan");
+        if (g.kind === "google-health" && status === 400) this.kv.delete("workout-scan");
         const retryAfter = (err as { response?: { headers?: Headers } })?.response?.headers?.get?.(
           "Retry-After",
         );
@@ -420,24 +498,104 @@ export class GoogleConnection extends DurableObject<ConnectorEnv> {
       });
     });
   }
-  deleteEvent(taskId: string, revision: number) {
+  calendarExportState() {
+    const grant = this.grant();
+    return grant?.kind === "google-calendar"
+      ? {
+          account: grant.sub,
+          enabled:
+            grant.options.exportEvents &&
+            !this.kv.get("closing") &&
+            scopes("google-calendar", { importEvents: false, exportEvents: true }).every((scope) =>
+              grant.permissions.includes(scope),
+            ),
+        }
+      : null;
+  }
+  reviewContext(kind: ConnectorKind) {
+    const g = this.grant();
+    if (!g || this.kv.get("closing")) return null;
+    return {
+      account: g.email,
+      generation: g.generation ?? String(g.installed),
+      directions: g.options,
+      kind,
+    };
+  }
+  executeReviewed(command: ReviewedConnectorCommand, receiptId: string) {
     return this.run(async () => {
-      const g = this.grant();
-      if (!g?.options.exportEvents || this.kv.get("closing")) return false;
-      const planner = this.env.USER_PLANNER.get(this.env.USER_PLANNER.idFromString(g.planner));
-      if (!(await planner.requestCalendarDeletion(taskId, g.sub, revision))) return false;
-      await this.wake();
-      return true;
+      const { kind, generation, account, action } = command;
+      const key = "agent-receipt:" + receiptId;
+      const saved = this.kv.get<"applied" | "awaiting-provider">(key);
+      if (saved) return saved;
+      const current = this.reviewContext(kind);
+      if (!current && action.op === "disconnectProvider") return "applied" as const;
+      if (!current || current.generation !== generation || current.account !== account)
+        throw new Error("The Google connection changed. Review the current account.");
+      if (action.op === "disconnectProvider") {
+        await this.closeConnection();
+        return "applied" as const;
+      }
+      if (kind !== "google-calendar") throw new Error("Calendar connection required.");
+      // An earlier attempt may have committed the planner admission before the
+      // connection object persisted its receipt. Recover without a second write.
+      const awaitsProvider =
+        action.op === "deletePublishedEvent" || (action.op === "setCalendarLink" && action.enabled);
+      if (awaitsProvider) {
+        const g = this.grant()!;
+        const planner = this.env.USER_PLANNER.get(this.env.USER_PLANNER.idFromString(g.planner));
+        if (await planner.calendarActionReceipt(receiptId)) return "awaiting-provider" as const;
+      }
+      if (action.op === "calendarSyncDirections") {
+        const same = (a: Directions, b: Directions) =>
+          a.importEvents === b.importEvents && a.exportEvents === b.exportEvents;
+        if (!same(current.directions, action.after)) {
+          if (!same(current.directions, action.before) || !(await this.setDirections(action.after)))
+            throw new Error("Sync settings or grant changed. Review current settings.");
+        }
+      } else if (action.op === "setCalendarLink") {
+        if (
+          !(await this.setLink(
+            action.taskId,
+            action.enabled,
+            { revision: action.revision, status: action.before },
+            receiptId,
+          ))
+        )
+          throw new Error("Calendar link changed. Review the event and export access.");
+      } else if (!(await this.queueDeletion(action.taskId, action.revision, receiptId))) {
+        throw new Error("Event or export permission changed. Review its current version.");
+      }
+      const result = awaitsProvider ? ("awaiting-provider" as const) : ("applied" as const);
+      this.kv.put(key, result);
+      return result;
     });
   }
+  deleteEvent(taskId: string, revision: number) {
+    return this.run(() => this.queueDeletion(taskId, revision));
+  }
+  private async queueDeletion(taskId: string, revision: number, receiptId?: string) {
+    const g = this.grant();
+    if (!g?.options.exportEvents || this.kv.get("closing")) return false;
+    const planner = this.env.USER_PLANNER.get(this.env.USER_PLANNER.idFromString(g.planner));
+    if (!(await planner.requestCalendarDeletion(taskId, g.sub, revision, receiptId))) return false;
+    await this.wake();
+    return true;
+  }
   link(taskId: string, enabled: boolean) {
-    return this.run(async () => {
-      const g = this.grant();
-      if (!g || (enabled && !g.options.exportEvents)) return false;
-      const planner = this.env.USER_PLANNER.get(this.env.USER_PLANNER.idFromString(g.planner));
-      if (!(await planner.publishCalendar(taskId, g.sub, enabled))) return false;
-      await this.wake();
-      return true;
-    });
+    return this.run(() => this.setLink(taskId, enabled));
+  }
+  private async setLink(
+    taskId: string,
+    enabled: boolean,
+    expected?: { revision: number; status: string },
+    receiptId?: string,
+  ) {
+    const g = this.grant();
+    if (!g || this.kv.get("closing") || (enabled && !g.options.exportEvents)) return false;
+    const planner = this.env.USER_PLANNER.get(this.env.USER_PLANNER.idFromString(g.planner));
+    if (!(await planner.publishCalendar(taskId, g.sub, enabled, expected, receiptId))) return false;
+    await this.wake();
+    return true;
   }
 }

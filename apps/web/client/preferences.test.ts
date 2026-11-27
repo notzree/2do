@@ -63,6 +63,20 @@ it("keeps legacy remaps and assigns unused keys to new date commands", () => {
   expect(new Set(Object.values(bindings)).size).toBe(Object.keys(defaultBindings).length);
 });
 
+it("moves the old chat default to quick chat and preserves existing custom bindings", () => {
+  const { agents: _, ...legacy } = defaultBindings;
+  for (const chatKey of ["a", "r"]) {
+    stored({ [storageKey]: JSON.stringify({ bindings: { ...legacy, copilot: chatKey } }) });
+    const { bindings } = readPreferences();
+    expect(bindings.agents).toBe("a");
+    expect(bindings.copilot).toBe(chatKey === "a" ? "q" : "r");
+  }
+  stored({ [storageKey]: JSON.stringify({ bindings: { ...legacy, week: "q", copilot: "a" } }) });
+  const { bindings } = readPreferences();
+  expect(bindings).toMatchObject({ week: "q", agents: "a" });
+  expect(new Set(Object.values(bindings)).size).toBe(Object.keys(defaultBindings).length);
+});
+
 it("rehydrates flat preferences, saves compatible JSON, and restores defaults after storage is cleared", async () => {
   const values = new Map([[storageKey, JSON.stringify({ theme: "nord", weekStart: 1 })]]);
   const setItem = vi.fn((key: string, value: string) => values.set(key, value));

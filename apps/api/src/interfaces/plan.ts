@@ -37,6 +37,8 @@ const fields = {
 	durationMinutes: z.int().positive().max(525600).nullable(),
 };
 const revision = z.int().nonnegative();
+const siblingIds = z.array(taskId).min(1).max(500).refine(ids=>new Set(ids).size===ids.length,"Duplicate child");
+export const siblingOrderChange = z.strictObject({before:siblingIds,after:siblingIds});
 export const task = z.strictObject({
 	id: taskId,
 	createdDate: z.iso.date().optional().describe("Local creation date, when known."),

@@ -10,6 +10,10 @@ import m0007 from './0007_subtype_extraction.sql';
 import m0008 from './0008_calendar_links.sql';
 import m0009 from './0009_planner_goals.sql';
 import m0010 from './0010_preserve_confirmed_logs.sql';
+import m0011 from './0011_agent_inbox.sql';
+import m0012 from './0012_agents_workspace.sql';
+import m0013 from './0013_workspace_records.sql';
+import m0014 from './0014_connected_workouts.sql';
 
   export default {
     journal,
@@ -24,7 +28,11 @@ m0006,
 m0007,
 m0008,
 m0009,
-m0010
+m0010,
+m0011,
+m0012,
+m0013,
+m0014
     }
   }
   

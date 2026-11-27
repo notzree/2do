@@ -1,9 +1,9 @@
+import { reportObservations } from "./fitness-import.ts";
 import { and, asc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import type { PlannerStore } from "./planner.ts";
 import {
   goalCheckIns,
   goalLinks,
-  metricObservations,
   plannerGoals,
   reportGoals,
   tasks,
@@ -86,7 +86,7 @@ export class GoalDatabase {
     this.store.insert(goalCheckIns).values({ goalId, note, at: new Date().toISOString() }).run();
   }
   observations(metrics: MetricDefinition[], period?: { from: string; to: string }) {
-    const o = metricObservations;
+    const o = reportObservations(this.store);
     if (!metrics.length) return [];
     return this.store
       .select({

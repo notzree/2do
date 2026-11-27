@@ -8,6 +8,7 @@ import { accessErrors, jsonBody, jsonErrors, jsonResponse, missing, named } from
 export const summaryOperations = {
   readTaskSummaries: createRoute({
     operationId: "readTaskSummaries",
+    "x-mcp": true,
     method: "post",
     path: "/api/tasks/summaries",
     summary: "Read plugin hints for a batch of notebook rows. Unknown tasks are omitted.",
@@ -21,6 +22,7 @@ export const summaryOperations = {
   }),
   setTaskPromptSkipped: createRoute({
     operationId: "setTaskPromptSkipped",
+    "x-mcp": true,
     method: "put",
     path: "/api/tasks/{id}/prompts/{promptId}",
     summary: "Skip or restore an eligible optional task hint",

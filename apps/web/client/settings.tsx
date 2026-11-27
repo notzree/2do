@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { CarryoverSettings } from "./carryover.tsx";
 import { Connections } from "./connections.tsx";
 import {
@@ -17,10 +18,14 @@ import {
   type Preferences,
 } from "./preferences.ts";
 import { shortcuts } from "./vim.ts";
-import { PluginSettings } from "./plugin-settings.tsx";
-import { GoalSettings } from "./goal-settings.tsx";
 import { sections, type Section } from "./settings-sections.ts";
 import "./settings.css";
+
+const AgentSettings = lazy(() => import("./agent-settings.tsx").then(m => ({ default: m.AgentSettings })));
+
+const PluginSettings = lazy(() => import("./plugin-settings.tsx").then(m => ({ default: m.PluginSettings })));
+
+const GoalSettings = lazy(() => import("./goal-settings.tsx").then(m => ({ default: m.GoalSettings })));
 
 const modes = [
   { id: "system", label: "System", Icon: Monitor },
@@ -202,11 +207,13 @@ export function Settings({ prefs, change, section, navigate }: Props) {
             </div>
           </section>
         )}
-        {section === "connections" ? <Connections /> : section === "plugins" ? <PluginSettings openGoals={() => navigate("goals")} /> : section === "goals" ? <GoalSettings openPlugins={() => navigate("plugins")} /> : (
+        <Suspense fallback={<p role="status">Loading settings…</p>}>
+        {section === "agent" ? <AgentSettings /> : section === "connections" ? <Connections /> : section === "plugins" ? <PluginSettings openGoals={() => navigate("goals")} /> : section === "goals" ? <GoalSettings openPlugins={() => navigate("plugins")} /> : (
           <footer className="preferences-note">
             <Monitor size={13} /> Appearance, shortcuts and week start apply on this device.
           </footer>
         )}
+        </Suspense>
       </div>
     </main>
   );

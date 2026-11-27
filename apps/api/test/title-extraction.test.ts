@@ -22,8 +22,9 @@ const context = {
 
 it("uses Clairic typed values and anchors a clock to the selected day", async () => {
   const extract = clairicExtractor({
-    async run(model: string, input: unknown) {
+    async run(model: string, input: unknown, options?: AiOptions) {
       expect(model).toBe("@cf/cloudflare/clairic");
+      expect(options?.returnRawResponse).toBe(true);
       expect(input).toMatchObject({
         state: expect.stringContaining("Task title: Run 400m at 7am"),
         reference_date: context.referenceDate,
@@ -33,7 +34,7 @@ it("uses Clairic typed values and anchors a clock to the selected day", async ()
           duration_seconds: { type: "duration" },
         },
       });
-      return {
+      return Response.json({
         answers: {
           scheduled_date: { value: null },
           scheduled_date_phrase: { value: null },
@@ -49,7 +50,7 @@ it("uses Clairic typed values and anchors a clock to the selected day", async ()
           due_time_zone: { value: null },
           duration_seconds: { value: null },
         },
-      } as never;
+      });
     },
   });
   expect(await extractTaskTime(extract, "Run 400m at 7am", context)).toEqual({

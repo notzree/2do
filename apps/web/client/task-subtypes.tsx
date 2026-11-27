@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, queryClient } from "./query.ts";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import type { Task } from "@2do/api/plan";
 import type {
   TaskDetails,
@@ -16,10 +16,10 @@ import { TaskTypeIcon } from "./task-type-icon.tsx";
 import { readTaskDetails, saveTaskSubtype, useTaskPlugins } from "./task-plugin-api.ts";
 import { fieldName, readFields, writeFields, type FieldValues } from "./subtype-fields.ts";
 
-type Subtype = TaskPluginInstallation["subtypes"][number];
+export type Subtype = TaskPluginInstallation["subtypes"][number];
 type Write = (input: WriteTaskSubtype) => Promise<void>;
 
-function useTaskDetails(task: Task, active: boolean) {
+export function useTaskDetails(task: Task, active: boolean) {
   const queryKey = ["planner", "details", task.id];
   const query = useQuery({
     queryKey,
@@ -52,6 +52,8 @@ function SubtypeEditor({
   busy,
   onChange,
   onSubmit,
+  compact = false,
+  discard,
 }: {
   editor: NonNullable<Subtype["editor"]>;
   label: string;
@@ -61,32 +63,35 @@ function SubtypeEditor({
   busy: boolean;
   onChange: (name: string, value: string) => void;
   onSubmit: (event: FormEvent) => void;
+  compact?: boolean;
+  discard?: () => void;
 }) {
   return (
-    <form className="editor" onSubmit={onSubmit}>
+    <form className={compact ? "editor property-editor" : "editor"} aria-label={label + " fields"} onSubmit={onSubmit}>
       {editor.map((group) => {
         const inputs = group.fields.map((field) => {
           const name = fieldName(group, field);
           const value = values[name] ?? "";
           return (
-            <label key={name}>
-              {field.label}
+            <label key={name} data-field={name}>
+              <span>{field.label}</span>
               {field.kind === "text-list" ? (
                 <>
                   <textarea
-                    rows={2}
+                    rows={compact ? 1 : 2}
+                    placeholder={compact ? "Add items…" : undefined}
                     disabled={busy}
                     value={value}
                     onChange={(event) => onChange(name, event.currentTarget.value)}
                   />
-                  <small>One item per line</small>
+                  <small className="field-help">One item per line</small>
                 </>
               ) : field.kind === "choice" ? (
                 <select disabled={busy} value={value} onChange={e=>onChange(name,e.target.value)}>
                   <option value="">Unspecified</option>{field.options.map(v=><option key={v}>{v}</option>)}
                 </select>
               ) : field.kind === "text" ? (
-                <input disabled={busy} maxLength={field.maxLength} value={value} onChange={e=>onChange(name,e.target.value)} />
+                <input disabled={busy} placeholder={compact ? "Add value…" : undefined} maxLength={field.maxLength} value={value} onChange={e=>onChange(name,e.target.value)} />
               ) : (
                 <input
                   disabled={busy}
@@ -111,17 +116,18 @@ function SubtypeEditor({
           </div>
         );
       })}
-      <div className="actions">
+      {(!compact || discard) && <div className="actions">
         <button type="submit" disabled={disabled}>
           Save {label}
         </button>
+        {discard && <button type="button" className="plain" disabled={busy} onClick={discard}>Cancel</button>}
         {saved && <small role="status">Saved</small>}
-      </div>
+      </div>}
     </form>
   );
 }
 
-function SubtypeRemoval({
+export function SubtypeRemoval({
   label,
   revision,
   busy,
@@ -152,19 +158,19 @@ function SubtypeRemoval({
   );
 }
 
-function SubtypeCard({
+export function SubtypeCard({
   definition,
   subtype,
   write,
   refresh,
-  inline = false,
+  layout = "inspector",
   children,
 }: {
   definition: Subtype;
   subtype: TaskSubtype | undefined;
   write: Write;
   refresh: () => void;
-  inline?: boolean;
+  layout?: "inspector" | "prompt" | "properties";
   children?: ReactNode;
 }) {
   const [draft, setDraft] = useState<{ base: TaskSubtype; values: FieldValues }>();
@@ -202,7 +208,8 @@ function SubtypeCard({
     }
   }
 
-  if (!data && !draft && inline) return <small>This detail is no longer available.</small>;
+  if (!data && !draft && layout === "properties") return null;
+  if (!data && !draft && layout === "prompt") return <small>This detail is no longer available.</small>;
   if (!data && !draft)
     return (
       <div className="type-add">
@@ -233,6 +240,12 @@ function SubtypeCard({
   const fieldEditor = (
     <SubtypeEditor
       editor={editor}
+      compact={layout === "properties"}
+      discard={layout === "properties" && draft ? () => {
+        setDraft(undefined);
+        setValidationError("");
+        mutation.reset();
+      } : undefined}
       label={label}
       values={values}
       saved={mutation.isSuccess && !draft && !!data}
@@ -250,8 +263,8 @@ function SubtypeCard({
   );
 
   return (
-    <section className="subtype-card" aria-label={label}>
-      {!inline && (
+    <section className={layout === "properties" ? "inline-properties" : "subtype-card"} data-subtype={definition.id} aria-label={label}>
+      {layout === "inspector" && (
         <div className="section-head">
           <h4>
             <TaskTypeIcon icon={definition.icon} />
@@ -268,7 +281,7 @@ function SubtypeCard({
           </button>
         </div>
       )}
-      {!inline && subtype && (
+      {layout === "inspector" && subtype && (
         <small className="type-source">
           {subtype.source === "automatic" ? (
             <>
@@ -281,7 +294,7 @@ function SubtypeCard({
           )}
         </small>
       )}
-      {!inline && editable && data && (
+      {layout === "inspector" && editable && data && (
         <dl className="type-values">
           {editor.flatMap((g) =>
             g.fields.flatMap((f) => {
@@ -298,11 +311,11 @@ function SubtypeCard({
           )}
         </dl>
       )}
-      {!editable && !inline && (
+      {!editable && (layout === "inspector" || (subtype && subtype.schemaVersion !== definition.schemaVersion)) && (
         <small>Saved with field schema version {subtype?.schemaVersion}.</small>
       )}
       {editable &&
-        (inline ? (
+        (layout !== "inspector" ? (
           fieldEditor
         ) : (
           <details className="type-edit">
@@ -363,7 +376,7 @@ export function PromptFields({ task, prompt }: { task: Task; prompt: EligibleTas
   });
   return (
     <SubtypeCard
-      inline
+      layout="prompt"
       definition={{ ...definition, editor }}
       subtype={details.subtypes.find((s) => s.typeId === definition.id)}
       refresh={refresh}
@@ -379,23 +392,14 @@ export function TaskSubtypes({
   active,
   openPlugins,
   renderPrompts,
-  compact = false,
 }: {
   task: Task;
   active: boolean;
   openPlugins: () => void;
   renderPrompts?: (typeId: string) => ReactNode;
-  compact?: boolean;
 }) {
   const { plugins, error: pluginError, retry } = useTaskPlugins();
   const { details, error, refresh, accept } = useTaskDetails(task, active);
-  const [showAvailable, setShowAvailable] = useState(false);
-  const seenTypes = useRef(new Set<string>());
-  useEffect(() => {
-    for (const subtype of details?.subtypes ?? []) {
-      if (subtype.data !== null) seenTypes.current.add(subtype.typeId);
-    }
-  }, [details]);
   const definitions = plugins?.filter(({ enabled }) => enabled).flatMap(({ subtypes }) => subtypes);
   const classify = useMutation({
     mutationFn: () => api.POST("/api/tasks/{id}/classify", { params: { path: { id: task.id } } }),
@@ -428,66 +432,6 @@ export function TaskSubtypes({
         ))}
     </SubtypeCard>
   );
-  if (compact) {
-    const attached =
-      definitions?.filter((definition) =>
-        details?.subtypes.some((s) => s.typeId === definition.id && s.data !== null),
-      ) ?? [];
-    const available = definitions?.filter((definition) => !attached.includes(definition)) ?? [];
-    return (
-      <section className="task-subtypes task-subtypes-compact" aria-label="Types and fields">
-        <h3>Types and fields</h3>
-        {(pluginError || error) && (
-          <div className="actions">
-            <p className="error" role="alert">
-              {pluginError || error}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                if (pluginError) retry();
-                if (error) refresh();
-              }}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-        {(!plugins || !details) && !pluginError && !error && <p role="status">Loading types…</p>}
-        {details && available.length > 0 && (
-          <button
-            type="button"
-            className="type-add-toggle"
-            aria-expanded={showAvailable}
-            onClick={() => setShowAvailable(!showAvailable)}
-          >
-            {showAvailable ? "Hide available types" : "+ Add type"}
-          </button>
-        )}
-        {details &&
-          definitions?.map((definition) => (
-            <div
-              key={definition.id}
-              hidden={
-                !showAvailable &&
-                !attached.includes(definition) &&
-                !seenTypes.current.has(definition.id)
-              }
-            >
-              {card(definition)}
-            </div>
-          ))}
-        {details && definitions?.length === 0 && (
-          <p>
-            No plugins enabled.{" "}
-            <button type="button" onClick={openPlugins}>
-              Open inspector
-            </button>
-          </p>
-        )}
-      </section>
-    );
-  }
   return (
     <section className="task-subtypes" aria-label="Task subtypes">
       <div className="section-head">

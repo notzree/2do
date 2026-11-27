@@ -28,13 +28,13 @@ Type `/ta` in a day of Week and press Space, Tab, or Enter to complete `/task `.
 
 Open an existing task and choose **Classify task** or **Recheck types** to run Clef on demand. The inspector records when Clef checked and which enabled types matched. A completed check with zero matches appears in Activity. The Commands button or ⌘K / Ctrl+K opens notebook commands and task search.
 
-Use `/agent` for the main chat and `/side` for a new side chat. Press Enter on the command to open its sidebar composer, or press Space, write your message inline, and press Enter to send. The first message names a side chat. Open the panel with `g a` and use its conversation selector to revisit a thread.
+Use `/agent` for the main chat and `/side` for a new side chat. Press Enter on the command to open its sidebar composer, or press Space, write your message inline, and press Enter to send. The first message names a side chat. Press `g a` or choose **Agents** in the notebook sidebar to open the Agents workspace. Press `g q` or choose **Quick chat** to open the current conversation beside the notebook.
 
 Open a task to edit its schedule, nest it under a parent, or add prerequisites. The Graph tab follows prerequisites from top to bottom across dates. A task's optional `parentId` controls its place in the outline. Deleting a parent promotes its direct children one level.
 
 ## Google connectors
 
-Open **Settings → Connections** to install read-only Gmail intake or choose Google Calendar sync directions. Publish individual scheduled events from their inspector. [OAuth, webhook setup and sync behavior](docs/google-connectors.md)
+Open **Settings → Connections** to install read-only Gmail intake, choose Google Calendar sync directions, or import Fitbit Air workouts into Fitness goals through Google Health. Publish individual scheduled events from their inspector. [OAuth, webhook setup and sync behavior](docs/google-connectors.md)
 
 ## Planner API
 
@@ -68,7 +68,7 @@ For an existing lunch event, submit a task like this to `POST /api/tasks`. Repla
 
 An edge `A → B` means A must finish before B can start. Inserting X **before** B moves every immediate incoming edge to X and adds `X → B`. Inserting X **after** A moves every immediate outgoing edge to X and adds `A → X`. Use the dependency endpoint to add a single constraint while preserving the other edges. An attempted cycle returns 409. A missing anchor returns 404. Failed edits roll back the task, edges and revision together. Deleting a task removes its incident edges. Repeating an edge addition or removal preserves the revision.
 
-Task schedules support a floating calendar date, a fixed interval, a flexible window or an unscheduled task. Intervals use ISO timestamps with offsets and exclusive ends. The client projects them onto the viewer's local calendar. From an open fixed-time task, **Propose new time** sends a before/after diff to **Review**. Copilot can propose a move through the same inbox. Acceptance updates the schedule. Recent decisions offers Undo while the task remains at its accepted revision.
+Task schedules support a floating calendar date, a fixed interval, a flexible window or an unscheduled task. Intervals use ISO timestamps with offsets and exclusive ends. The client projects them onto the viewer's local calendar. From an open fixed-time task, **Propose new time** sends a before/after diff to **Agent Inbox**. Copilot can propose a move through the same inbox. Acceptance updates the schedule. Recent decisions offers Undo while the task remains at its accepted revision.
 
 ### Task plugins
 
@@ -128,9 +128,17 @@ Run `npm run mcp:build` from the repo root to generate and compile the stdio ser
 
 The loopback API accepts requests without an Access cookie when `LOCAL_PLANNER=enabled`. The client setting above lets the generated server make those requests. Call `listTasks` to read the same plan as the local UI.
 
-Task, dependency, and day-page operations are enabled. To add a JSON planner operation to the agent, set `"x-mcp": true` on its Hono route definition in [routes](./apps/api/src/routes) and run `npm run openapi` to refresh the API document, browser types, and Worker tool catalog. CI checks all three for drift. The agent uses Flue’s MCP discovery inside the Worker and calls the planner selected by the authenticated conversation. It uses `searchTasks` for bounded lookups and receives the local date and IANA time zone with each message sent by the web client. Flue tracing excludes content, and Copilot requests disable AI Gateway log collection and caching. Account-level Logpush exports have separate controls.
+Planner reads, reviewed planner changes, reminders, inbox interactions and selected Google operations are enabled. To add a JSON planner operation to the agent, set `"x-mcp": true` on its Hono route definition in [routes](./apps/api/src/routes) and register the effects of a mutation in the agent approval policy. Run `npm run openapi` to refresh the API document, browser types, and Worker tool catalog. CI checks all three for drift. The agent uses Flue’s MCP discovery inside the Worker and calls the planner selected by the authenticated conversation. It uses `searchTasks` for bounded lookups and receives the local date and IANA time zone with each message sent by the web client. Flue tracing excludes content, and Copilot requests disable AI Gateway log collection and caching. Account-level Logpush exports have separate controls.
 
 For external stdio clients, run `npm run mcp:build` and restart the client connection. This regenerates both catalogs and replaces the build in `.generated/mcp`.
+
+### Agent Inbox and reminders
+
+Ordinary todos captured in chat go on the local day of the request. Ask for a different day or the backlog to override the default. When scheduling a timed event, Copilot asks for a missing start time.
+
+Open **Agents** for Main chat, Needs attention, All activity, side chats and archived objectives. Every fresh chat can search active workspace proposals and link an existing decision by ID. Open a queue row to review its saved diff or answer its question. The record survives its originating chat. Use **Continue in side chat** to branch from a Main exchange, **@** to reference other conversations for a turn, and **Report back to Main** in conversation settings to publish a milestone. Use **Settings → Agent** for approval rules, reminder schedules and device notifications.
+
+The planner alarm handles time-based reminders even with no open browser. Web Push requires `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY` and `WEB_PUSH_SUBJECT` on the API Worker, plus a browser subscription. The application can still deliver in-app notices with push disabled. Calendar and Gmail setup is documented in the [connector guide](docs/google-connectors.md). The [implementation plan](docs/agent-overhaul.md) records file ownership, integration order and release scenarios.
 
 ### Copilot evaluations
 
@@ -144,9 +152,11 @@ Run `npm run eval:copilot -w @2do/api` with Wrangler authenticated to a Workers 
 
 ## Access and deployment
 
-Use a hostname in a Cloudflare-managed zone and an existing Zero Trust team with a sign-in method configured. Apply [the Access configuration](./infra/access/main.tf) first. It provisions one reusable email allow policy and one self-hosted application covering `/app`, `/api` and their children. The landing page at `/` stays public. Both Workers disable workers.dev and preview URLs.
+Use a hostname in a Cloudflare-managed zone and enable [One-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/) in the Zero Trust team. Anyone who verifies their email can open their own planner on first sign-in. Apply [the Access configuration](./infra/access/main.tf) first. It protects `/app`, `/api` and their children with a reusable Allow policy for the selected login methods. The landing page at `/` stays public. Both Workers disable workers.dev and preview URLs.
 
-Set `CLOUDFLARE_API_TOKEN` for Terraform to an account-scoped token that can manage Access apps and policies. Supply your account ID, planner hostname and allowed email addresses using the Terraform variables `account_id`, `hostname` and `allowed_emails`. Keep the state in persistent private storage.
+For Google sign-in, create a web OAuth client for the planner in Google Auth Platform. Use the Zero Trust team origin as its authorized JavaScript origin and `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback` as its redirect URI. Enter the client ID and secret in the team's Google identity provider. [Cloudflare setup guide](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/)
+
+Set `CLOUDFLARE_API_TOKEN` for Terraform to an account-scoped token that can manage Access apps and policies. Supply `account_id`, `hostname` and `login_method_ids`. Set `login_method_ids` to the Google and One-time PIN Access provider IDs. This list controls both the choices on the login page and the methods the planner accepts. Keep the state in persistent private storage.
 
 ```sh
 terraform -chdir=infra/access init
@@ -171,7 +181,7 @@ Pull requests run contract checks, type checks, tests, both builds and Terraform
 
 Both jobs use GitHub-hosted Ubuntu while this repository is personally owned. For an organization-owned repository they use `blacksmith-2vcpu-ubuntu-2404`. Enable the repository in the organization's [Blacksmith GitHub integration](https://docs.blacksmith.sh/introduction/quickstart) before running the workflow there.
 
-To verify a live deployment, open the root in a signed-out browser, sign in, add a task, and check it in all three planner views. A second allowed account should see its own empty plan.
+To verify a live deployment, open the root in a signed-out browser, sign in, add a task, and check it in all three planner views. In a separate browser session, sign in by email PIN with a new address and verify that its planner starts empty.
 
 ```sh
 npm run openapi:check

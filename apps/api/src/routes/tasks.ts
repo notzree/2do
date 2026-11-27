@@ -29,6 +29,7 @@ import {
 	direction,
 	edge,
 	patchTask,
+  siblingOrderChange,
 	plan,
 	task,
 	taskId,
@@ -57,6 +58,12 @@ const dependencyQuery = z.object({
 });
 
 export const taskOperations = {
+  reorderSubtasks:createRoute({
+    method:"put",path:"/api/tasks/{id}/subtask-order",operationId:"reorderSubtasks","x-mcp":true,
+    summary:"Reorder direct subtasks. Supply every child ID in current agenda order and in the desired order.",
+    middleware:jsonLimits(),request:{params:taskParams,body:jsonBody(siblingOrderChange)},
+    responses:{200:jsonResponse(z.object({order:z.array(taskId)})),...accessErrors,...jsonErrors,404:missing,409:conflict},
+  }),
 	runPluginAction: createRoute({
 		operationId: "runPluginAction",
 		method: "post",
@@ -79,6 +86,7 @@ export const taskOperations = {
 	}),
 	classifyTask: createRoute({
 		operationId: "classifyTask",
+		"x-mcp": true,
 		method: "post",
 		path: "/api/tasks/{id}/classify",
 		summary: "Queue classification for an existing task or retry a failed check",
@@ -224,6 +232,7 @@ export const taskOperations = {
 	}),
 	setTaskPluginEnabled: createRoute({
 		operationId: "setTaskPluginEnabled",
+		"x-mcp": true,
 		method: "put",
 		path: "/api/task-plugins/{pluginId}",
 		summary: "Enable or disable a task plugin for the signed-in user",
@@ -316,6 +325,10 @@ export function plannerRoutes(
 ) {
 	const app = new OpenAPIHono<PlannerCaller>();
 	const op = taskOperations;
+  app.openapi(op.reorderSubtasks,async c=>{
+    const {before,after}=c.req.valid("json");
+    return c.json(await commit(()=>planner.reorderSubtasks(c.req.valid("param").id,before,after)),200);
+  });
 	app.openapi(op.runPluginAction, async (c) => {
 		const { id, typeId, actionId } = c.req.valid("param");
 		return c.json(
@@ -344,7 +357,7 @@ export function plannerRoutes(
 				})
 				: undefined,
 		]);
-		return c.json(await commit(() => planner.createOutline(input, outline, undefined, timing)), 201);
+		return c.json(await commit(() => planner.createOutline(input, outline, undefined, timing, c.env?.captureDate)), 201);
 	});
 	app.openapi(op.getTask, (c) => c.json(planner.get(c.req.valid("param").id), 200));
 	app.openapi(op.updateTask, async (c) => {

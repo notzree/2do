@@ -39,6 +39,29 @@ const log = z.strictObject({
   km: z.number().nonnegative().optional(),
   activity: z.string(),
 });
+export function activityObservations(
+  e: { day: string; minutes: number; km?: number | null; activity: string },
+  running = /\b(run|running|jog|jogging)\b/i.test(e.activity),
+  elapsedMinutes = e.minutes,
+) {
+  const facts: Record<string, number | null> = {
+    sessions: 1,
+    minutes: e.minutes,
+    distance: e.km ?? null,
+  };
+  if (running) {
+    facts["run-distance"] = e.km ?? null;
+    facts["run-minutes"] = elapsedMinutes;
+  }
+  return Object.entries(facts).map(([id, value]) => ({
+    metricId: "fitness." + id,
+    metricVersion: 1,
+    sourceKey: "activity",
+    day: e.day,
+    value,
+  }));
+}
+
 const workflow = logWorkflow({
   schema: log,
   action: {
@@ -70,24 +93,7 @@ const workflow = logWorkflow({
   form(e) {
     return { ...e } as Record<string, string | number>;
   },
-  measure(e) {
-    const facts: Record<string, number | null> = {
-      sessions: 1,
-      minutes: e.minutes,
-      distance: e.km ?? null,
-    };
-    if (/\b(run|running|jog|jogging)\b/i.test(e.activity)) {
-      facts["run-distance"] = e.km ?? null;
-      facts["run-minutes"] = e.minutes;
-    }
-    return Object.entries(facts).map(([id, value]) => ({
-      metricId: "fitness." + id,
-      metricVersion: 1,
-      sourceKey: "activity",
-      day: e.day,
-      value,
-    }));
-  },
+  measure: activityObservations,
 });
 export const fitnessPlugin: TaskPlugin = {
   id: "fitness",

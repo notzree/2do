@@ -256,6 +256,25 @@ it("selects one eligible subtype above 0.5 and rejects results from superseded t
 	});
 });
 
+it("classifies with the same raw response mode as a streaming Copilot call", async () => {
+	const signal = new AbortController().signal;
+	const classifier = ClefTaskClassifier.using({
+		async run(model, _input, options) {
+			expect(model).toBe("@cf/cloudflare/clef-flash");
+			expect(options).toEqual({ returnRawResponse: true, signal });
+			return Response.json({ answers: { q0: { noul: 0.96 } } });
+		},
+	});
+	const task = {
+		taskId: "lunch",
+		title: "Have lunch",
+		candidates: [{ typeId: "meal", instructions: "Eating a meal" }],
+	};
+	expect(await classifier.classify([task], signal)).toEqual([
+		{ taskId: "lunch", scores: { meal: 0.96 } },
+	]);
+});
+
 it("keeps each task in its own Clef state and sends every eligible subtype in groups of 64", async () => {
 	const candidates = Array.from({ length: 65 }, (_, i) => ({
 		typeId: "test.type-" + i,

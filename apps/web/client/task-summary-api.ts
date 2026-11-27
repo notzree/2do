@@ -41,11 +41,9 @@ export function useWeekTaskHints(days: Date[], tasks: Task[], includeUnscheduled
     )
     .map((t) => t.id)
     .sort();
-  const batches = [];
-  for (let i = 0; i < ids.length; i += summaryBatchSize) {
-    batches.push(summaryQuery(ids.slice(i, i + summaryBatchSize)));
-  }
-  const queries = useQueries({ queries: batches });
+  // Each day may add references to tasks scheduled elsewhere. Batch the settled set once.
+  const loadingPages = pages.some((page) => page.isPending);
+  const queries = useQueries({ queries: loadingPages ? [] : summaryBatches(ids) });
   const summaries = new Map(
     queries.flatMap(({ data }) => (data ?? []).map((s) => [s.id, s] as const)),
   );
@@ -58,10 +56,17 @@ export function useWeekTaskHints(days: Date[], tasks: Task[], includeUnscheduled
       ? `Classifying ${pending} ${pending === 1 ? "task" : "tasks"}`
       : rejected
         ? "Classification failed"
-        : queries.some((q) => q.isPending)
+        : loadingPages || queries.some((q) => q.isPending)
           ? "Checking hints"
           : "Ready";
   return { summaries, status, failed };
+}
+
+function summaryBatches(ids: string[]) {
+  const batches = [];
+  for (let i = 0; i < ids.length; i += summaryBatchSize)
+    batches.push(summaryQuery(ids.slice(i, i + summaryBatchSize)));
+  return batches;
 }
 
 export function useInspectorPrompts(taskId: string) {

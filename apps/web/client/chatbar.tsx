@@ -1,10 +1,19 @@
+import {inboxPage} from "@2do/api/agent-inbox";
+import {api} from "./query.ts";
+import {useConversationActivity} from "./agent-activity.ts";
+import {BranchDialog,ConversationReferences,WorkspaceItemPicker} from "./conversation-controls.tsx";
+import {openAgents, type AgentLocation} from "./agents-navigation.ts";
+import type {FlueConversationMessage} from "@flue/sdk";
 import { setActivePanel, useWorkspacePanels } from "./workspace-panels.ts";
-import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { useFlueAgent } from "@flue/react";
 import {
+	AtSign, Link2,
 	ArrowUp,
+	Paperclip,
+	Inbox,
 	Check,
 	ChevronDown,
 	CornerDownLeft,
@@ -25,9 +34,14 @@ import {
 	selectChat,
 	sendChat,
 	setChatError,
+	setAttachment, setChatScope,
+	setChatReplyTarget,
 	setDraft,
 	useChats,
 } from "./chats.ts";
+import { decideItem, defaultReplyTarget, itemReplyTarget, routeChatReply, toolInboxItem, type ChatDecision } from "./agent-inbox-api.ts";
+import { ConversationInbox, useConversationCards } from "./conversation-inbox.ts";
+import { uploadImage } from "./upload-image.ts";
 import { ChatTranscript } from "./chat-transcript.tsx";
 import "./chatbar.css";
 
@@ -129,16 +143,20 @@ function EmptyChat({
 	);
 }
 
-export function Chatbar() {
+export function Chatbar({route}:{route?:AgentLocation}={}) {
 	const id = useChats((s) => s.selected);
-	return <ChatPanel key={id} id={id} />;
+	const chat=route?(route.page==="chat"?route.id!:"me"):id;
+	return <ChatPanel key={chat} id={chat} route={route} />;
 }
 
-function ChatPanel({ id }: { id: string }) {
+function ChatPanel({ id,route }: { id: string;route?:AgentLocation }) {
+  const [branch,setBranch]=useState<FlueConversationMessage>();
+  const [picker,setPicker]=useState<"context"|"proposal">();
+  const composers = useChats((s) => s.composers);
+  const composer = composers[id] ?? emptyComposer;
+  const timelineEvents = useConversationActivity(id, route?.event, !composer.isNew);
 	const list = useQuery(chatsQuery);
-	const composers = useChats((s) => s.composers);
 	const focus = useChats((s) => s.focus);
-	const composer = composers[id] ?? emptyComposer;
 	const [client] = useState(() => chatClient(id));
 	const agent = useFlueAgent({ client: composer.isNew ? undefined : client, live: "sse" });
 	const { refresh } = agent;
@@ -147,21 +165,52 @@ function ChatPanel({ id }: { id: string }) {
 	useEffect(() => {
 		if (composer.version) refresh();
 	}, [composer.version, refresh]);
+	const focusComposer = !route || composer.isNew;
 	useEffect(() => {
-		input.current?.focus({ preventScroll: true });
-	}, [focus]);
+		if (focusComposer) input.current?.focus({ preventScroll: true });
+	}, [focus, focusComposer]);
 
-	const messages = agent.messages.filter(
-		(m) => m.display === "visible" && (m.purpose === "user" || m.purpose === "assistant"),
-	);
+	const anchor=route?.message ?? route?.item;
+  const older=useQuery({queryKey:["planner","conversation-window",id,anchor,route?.generation],enabled:!!anchor && !composer.isNew,
+    queryFn:async({signal})=>{
+      const head=await client.history({limit:80,signal});
+      if(route?.generation && String(head.incarnation)!==route.generation)return [];
+      const found=(ms:FlueConversationMessage[])=>ms.some(m=>m.id===route?.message||m.parts.some(p=>toolInboxItem(p)===route?.item && !!route?.item));
+      if(found(head.messages))return head.messages;
+      let cursor=head.before;
+      while(cursor){const page=await client.historyBefore(cursor,{limit:80,signal});if(found(page.messages))return page.messages;if(page.before===cursor)break;cursor=page.before;}
+      return [];
+    }});
+  const messages = useMemo(() => {
+    const liveIds = new Set(agent.messages.map(m => m.id));
+    return [...(older.data ?? []).filter(m => !liveIds.has(m.id)), ...agent.messages].filter(
+      m => m.display === "visible" && (m.purpose === "user" || m.purpose === "assistant"),
+    );
+  }, [agent.messages, older.data]);
+  const { cards, items } = useConversationCards(messages, timelineEvents, route?.item);
+  const pendingQuery=useInfiniteQuery({queryKey:["planner","inbox","conversation",id],initialPageParam:undefined as string|undefined,
+    enabled:!composer.isNew,queryFn:async({pageParam,signal})=>inboxPage.parse((await api.GET("/api/agent/inbox",{params:{query:{chat:id,view:"action",cursor:pageParam,limit:100}},signal})).data),
+    getNextPageParam:page=>page.nextCursor??undefined,refetchInterval:10000});
+  const visibleItems = [...new Map([...items.flatMap(card => card?.item ? [card.item] : []),...pendingQuery.data?.pages.flatMap(p=>p.items)??[]].map(item=>[item.id,item])).values()];
+	const pendingTargets = visibleItems.filter(item => item.status === "pending" && !item.elicitation && item.source!=="device" && (item.conversation === id || item.references?.includes(id)) && item.kind !== "notification");
+	const targetsLoading=!composer.isNew && !pendingQuery.isSuccess || items.some(card => !card?.item || !!card.error);
+	const replyTarget = composer.replyTarget ?? (targetsLoading ? {kind:"choose" as const} : defaultReplyTarget(visibleItems,id));
+	const replying = replyTarget.kind === "question";
+	const boundItem = replying || replyTarget.kind === "proposal";
+	const decide = useMutation({mutationFn:async (decision:ChatDecision) => {
+		await decideItem(decision.id,decision.body);
+	},onSuccess:() => {setDraft(id,""); setChatReplyTarget(id,undefined); void refresh();}});
+	const attach = useMutation({mutationFn:async (file:File) => ({id:await uploadImage(file),name:file.name}),
+		onSuccess:(file) => setAttachment(id,file)});
+	const fileInput = useRef<HTMLInputElement>(null);
 	const settlements = agent.settlements;
-	const settled = new Set(settlements.map((s) => s.submissionId));
+	const settled = useMemo(() => new Set(settlements.map(s => s.submissionId)), [settlements]);
 	const busy = Boolean(
 		composer.busy || agent.status === "submitted" || agent.status === "streaming",
 	);
 	const lastSettlement = settlements.at(-1);
 	const error =
-		composer.error ||
+		decide.error?.message || attach.error?.message || composer.error ||
 		agent.error?.message ||
 		(lastSettlement?.outcome === "failed" && !busy
 			? "The agent could not complete its last response."
@@ -177,7 +226,7 @@ function ChatPanel({ id }: { id: string }) {
 			id,
 			title: composers[id].draft.trim() || "New side chat",
 		})),
-		...sides,
+		...sides.filter(s=>!s.archivedAt),
 	];
 	const loading = !composer.isNew && !agent.historyReady && !error;
 	const empty = !messages.length && !busy && !loading && !error;
@@ -188,6 +237,7 @@ function ChatPanel({ id }: { id: string }) {
 		!settled.has(last.submissionId) &&
 		last.parts.some((part) => (part.type === "text" && part.text) || part.type === "dynamic-tool");
 	function close() {
+		if(route)return;
 		setActivePanel(null);
 		requestAnimationFrame(() => {
 			if (useWorkspacePanels.getState().activePanel) return;
@@ -200,7 +250,7 @@ function ChatPanel({ id }: { id: string }) {
 	}
 	return (
 		<aside
-			className="copilot"
+			className={route?"copilot workspace-conversation":"copilot"}
 			aria-label="Agent chat"
 			onKeyDown={(event) => {
 				if (
@@ -210,15 +260,17 @@ function ChatPanel({ id }: { id: string }) {
 					!event.currentTarget.querySelector('[data-state="open"]')
 				) {
 					event.stopPropagation();
-					close();
+					if (route) event.currentTarget.closest("main")?.focus({ preventScroll: true });
+					else close();
 				}
 			}}
 		>
-			<header className="copilot-head">
+			{!route && <header className="copilot-head">
 				<div className="chat-identity">
 					<AgentMark />
 					<strong>Agent</strong>
 				</div>
+				<button type="button" className="chat-icon" title="Open Agents" aria-label="Open Agents" onClick={() => openAgents(id==="me"?{page:"main"}:{page:"chat",id})}><Inbox size={17}/></button>
 				<button
 					className="chat-icon"
 					title="New side chat"
@@ -235,17 +287,22 @@ function ChatPanel({ id }: { id: string }) {
 				>
 					<X size={18} />
 				</button>
-			</header>
-			<div className="chat-switcher">
+			</header>}
+			{!route && <div className="chat-switcher">
 				<ChatPicker id={id} options={options} />
 				{list.error && (
 					<p className="chat-error" role="alert">
 						Could not load chats. <button onClick={() => void list.refetch()}>Retry</button>
 					</p>
 				)}
-			</div>
+			</div>}
+      {branch&&<BranchDialog message={branch} previous={branch.role==="assistant"?messages.slice(0,messages.findIndex(m=>m.id===branch.id)).findLast(m=>m.role==="user"):undefined} close={()=>setBranch(undefined)}/>}
+      {picker==="context"&&<ConversationReferences id={id} chats={sides} scope={composer.scope??[]} onClose={()=>setPicker(undefined)}/>}
+      {picker==="proposal"&&<WorkspaceItemPicker chat={id} close={()=>setPicker(undefined)}/>}
+			<ConversationInbox.Provider value={cards}>
 			<ChatTranscript
-				messages={messages}
+				messages={messages} route={route} chat={id} events={timelineEvents} resolvingSource={!!route?.message && older.isPending} unavailableSource={!!route?.message && (older.isError || older.isSuccess && !older.data?.length)}
+        branch={id==="me"?setBranch:undefined}
 				busy={busy}
 				settled={settled}
 				stopped={!busy && lastSettlement?.outcome === "aborted"}
@@ -259,7 +316,7 @@ function ChatPanel({ id }: { id: string }) {
 							: undefined
 				}
 			>
-				{empty && (
+				{empty && !route?.item && !timelineEvents.length && (
 					<EmptyChat
 						main={id === "me"}
 						hasDraft={Boolean(composer.draft.trim())}
@@ -267,7 +324,9 @@ function ChatPanel({ id }: { id: string }) {
 					/>
 				)}
 			</ChatTranscript>
-			<footer className="chat-dock">
+			</ConversationInbox.Provider>
+			{pendingQuery.hasNextPage&&<button onClick={()=>void pendingQuery.fetchNextPage()}>Load more pending decisions</button>}
+      {sides.some(c=>c.id===id&&c.archivedAt)?<p className="archived-notice">Archived conversation</p>:<footer className="chat-dock">
 				{error && (
 					<p className="chat-error" role="alert">
 						{error}
@@ -277,18 +336,60 @@ function ChatPanel({ id }: { id: string }) {
 					className="chat-composer"
 					onSubmit={(e) => {
 						e.preventDefault();
-						if (!busy) void sendChat(id, composer.draft);
+						if (busy) {
+							if (/^(?:stop|cancel)(?: the)?(?: response| run)?[.!]?$/i.test(composer.draft.trim()) && !composer.admitting)
+								void client.abort().then(() => setDraft(id,"")).catch((e) => setChatError(id,e));
+							return;
+						}
+						if (attach.isPending || decide.isPending) return;
+						const ready = !targetsLoading;
+						const bypass = composer.replyTarget?.kind === "message";
+						if (!ready && !bypass) {
+							setChatError(id,new Error("Loading the latest inbox items. Retry, or start a new message."));
+							return;
+						}
+						const reply = routeChatReply(composer.draft,visibleItems,id,replyTarget);
+						if (reply.kind === "blocked") {setChatError(id,new Error(reply.reason)); return;}
+						if (reply.kind === "decision") {
+							if (composer.attachment) {setChatError(id,new Error("Remove the attachment or start a new message.")); return;}
+							decide.mutate(reply.value); return;
+						}
+						void sendChat(id, composer.draft);
 					}}
 				>
-					<textarea
-						ref={input}
+					{(pendingTargets.length > 0 || boundItem || replyTarget.kind === "choose" || items.some(card => card?.error)) &&
+						<label className="chat-reply-target">Reply to
+							<select aria-label="Reply target" disabled={decide.isPending}
+								value={boundItem ? replyTarget.id : replyTarget.kind === "choose" ? "" : "message"}
+								onChange={e => {
+									const selected = pendingTargets.find(item => item.id === e.target.value);
+									setChatReplyTarget(id, selected ? itemReplyTarget(selected) : {kind:"message"});
+									input.current?.focus();
+								}}>
+								{replyTarget.kind === "choose" && <option value="" disabled>Choose an inbox item</option>}
+								{boundItem && !pendingTargets.some(item => item.id === replyTarget.id && item.version === replyTarget.version) &&
+									<option value={replyTarget.id} disabled>{replyTarget.title} (changed)</option>}
+								{pendingTargets.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+								<option value="message">New message</option>
+							</select>
+						</label>}
+					{!!composer.scope?.length && <div className="context-chips">{composer.scope.map(source=><button key={source} type="button" title="Remove conversation reference" onClick={()=>setChatScope(id,composer.scope!.filter(c=>c!==source))}>@{source==="me"?"Main chat":source==="active-sides"?"Active side chats":sides.find(s=>s.id===source)?.title??"Side chat"} ×</button>)}</div>}
+          <textarea
+            ref={input}
 						value={composer.draft}
 						maxLength={2000}
 						rows={2}
-						placeholder="Message your agent…"
-						aria-label="Message the agent"
-						readOnly={composer.admitting}
-						onChange={(e) => setDraft(id, e.target.value)}
+						placeholder={replying ? "Answer this question…" : replyTarget.kind==="proposal" ? "Approve, reject, or describe your changes…" : "Message your agent…"}
+						aria-label={replying ? "Reply to " + replyTarget.title : "Message the agent"}
+						readOnly={composer.admitting || decide.isPending}
+						onChange={(e) => {
+							if(e.target.value.endsWith("@") && (e.target.value.length===1 || /\s@$/.test(e.target.value))){
+                setDraft(id,e.target.value.slice(0,-1),{kind:"message"});setPicker("context");return;
+              }
+              // Lock the displayed question and its revision when the user begins an answer.
+							// Later updates or another tab's decision cannot redirect their draft.
+							setDraft(id,e.target.value,replyTarget);
+						}}
 						onKeyDown={(e) => {
 							if (
 								e.key === "Enter" &&
@@ -297,11 +398,21 @@ function ChatPanel({ id }: { id: string }) {
 								e.nativeEvent.keyCode !== 229
 							) {
 								e.preventDefault();
-								if (!busy && !e.repeat) e.currentTarget.form?.requestSubmit();
+								if (!e.repeat) e.currentTarget.form?.requestSubmit();
 							}
 						}}
 					/>
+					{composer.attachment && <div className="chat-attachment">{composer.attachment.name}
+						<button type="button" aria-label="Remove attached image" onClick={() => setAttachment(id)}>×</button>
+					</div>}
 					<div className="chat-composer-bar">
+						<button type="button" className="chat-icon" aria-label="Reference a conversation" title="Reference a conversation" onClick={()=>setPicker("context")}><AtSign size={16}/></button>
+            {<button type="button" className="chat-icon" aria-label="Link a workspace proposal" title="Link a workspace proposal" onClick={()=>setPicker("proposal")}><Link2 size={16}/></button>}
+            <input type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif" ref={fileInput}
+							onChange={event => {const file=event.currentTarget.files?.[0]; event.currentTarget.value=""; if(file) attach.mutate(file);}}/>
+						<button className="chat-icon" type="button" aria-label="Attach a notebook image" disabled={attach.isPending || busy || replying}
+							onClick={() => fileInput.current?.click()}><Paperclip size={16}/></button>
+						{attach.isPending && <small role="status">Uploading image…</small>}
 						<span className="chat-key-hint">
 							<CornerDownLeft size={12} /> Send <span>·</span> Shift + Enter for a new line
 						</span>
@@ -323,14 +434,14 @@ function ChatPanel({ id }: { id: string }) {
 								type="submit"
 								title="Send message"
 								aria-label="Send message"
-								disabled={!composer.draft.trim()}
+								disabled={(!composer.draft.trim() && !composer.attachment) || decide.isPending || attach.isPending}
 							>
 								<ArrowUp size={18} />
 							</button>
 						)}
 					</div>
 				</form>
-			</footer>
+			</footer>}
 		</aside>
 	);
 }

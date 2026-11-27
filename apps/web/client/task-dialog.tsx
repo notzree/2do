@@ -241,7 +241,8 @@ export function TaskInspector({
 }) {
   const [sub, setSub] = useState(""),
     [prereq, setPrereq] = useState("");
-  const before = plan.edges.filter((e) => e.to === task.id).map((e) => e.from);
+  const before = new Set(plan.edges.filter((e) => e.to === task.id).map((e) => e.from));
+  const taskTitles = new Map(plan.tasks.map(t => [t.id, t.title]));
   const prompts = useInspectorPrompts(task.id);
   const children = plan.tasks.filter((t) => t.parentId === task.id);
   return (
@@ -372,10 +373,10 @@ export function TaskInspector({
               </button>
             </form>
             <h3>Prerequisites</h3>
-            {before.map((id) => (
+            {Array.from(before, (id) => (
               <div className="section-head" key={id}>
                 <button className="relation" onClick={() => select(id)}>
-                  {plan.tasks.find((t) => t.id === id)?.title}
+                  {taskTitles.get(id)}
                 </button>
                 <button
                   className="plain"
@@ -400,7 +401,7 @@ export function TaskInspector({
               >
                 <option value="">Choose task…</option>
                 {plan.tasks
-                  .filter((t) => t.id !== task.id && !before.includes(t.id))
+                  .filter((t) => t.id !== task.id && !before.has(t.id))
                   .map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.title}

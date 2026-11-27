@@ -1,3 +1,4 @@
+import { reportObservations } from "./fitness-import.ts";
 import { GoalDatabase } from "./goals.ts";
 import { PlannerError } from "../core/planner.ts";
 import { and, eq, gte, lt, or, sql } from "drizzle-orm";
@@ -10,7 +11,7 @@ import {
 } from "../interfaces/plugin-reports.ts";
 import type { PlannerStore } from "./planner.ts";
 import {
-  metricObservations as observations,
+  metricObservations as taskObservations,
   reportCalendar,
   reportGoals,
 } from "./report-schema.ts";
@@ -39,8 +40,8 @@ export class SqlitePluginReportDatabase {
   }
 
   hasObservations(taskId: string) {
-    return !!this.store.select({ id: observations.taskId }).from(observations)
-      .where(eq(observations.taskId, taskId)).limit(1).get();
+    return !!this.store.select({ id: taskObservations.taskId }).from(taskObservations)
+      .where(eq(taskObservations.taskId, taskId)).limit(1).get();
   }
 
   replaceObservations(
@@ -51,12 +52,12 @@ export class SqlitePluginReportDatabase {
   ) {
     this.transaction(() => {
       this.store
-        .delete(observations)
-        .where(and(eq(observations.taskId, taskId), eq(observations.typeId, typeId)))
+        .delete(taskObservations)
+        .where(and(eq(taskObservations.taskId, taskId), eq(taskObservations.typeId, typeId)))
         .run();
       for (const value of values) {
         this.store
-          .insert(observations)
+          .insert(taskObservations)
           .values({ taskId, typeId, revision, ...metricObservation.parse(value) })
           .run();
       }
@@ -64,6 +65,7 @@ export class SqlitePluginReportDatabase {
   }
 
   daily(metrics: readonly MetricDefinition[], from: string, to: string) {
+    const observations = reportObservations(this.store);
     const grouped = new Map<
       string,
       Map<string, { value: number | null; known: number; unknown: number }>

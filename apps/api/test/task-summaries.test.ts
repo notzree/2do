@@ -181,3 +181,29 @@ it("keeps rejected and opaque subtype details while projecting only active row c
 		inlays: [],
 	});
 });
+
+it("shows logged work in the batch summary and keeps actual minutes separate from planned duration", async () => {
+	const planner = user();
+	const type = "productivity.work-session";
+	await planner.call("task-plugins/productivity", "PUT", { enabled: true });
+	const session = task.parse(await (await planner.call("tasks", "POST", {
+		title: "Study", durationMinutes: 90,
+	})).json());
+	const path = "tasks/" + session.id;
+	await planner.call(path + "/subtypes/" + type, "PUT", { revision: null, data: { project: "SYDE 411, ECE 356" } });
+	const workflow = async () => {
+		const details = taskDetails.parse(await (await planner.stub.fetch("https://planner.test/api/" + path + "/details")).json());
+		return details.workflows!.find(w => w.typeId === type)!;
+	};
+	const planned = await workflow();
+	expect(planned.properties).toEqual([{ label: "Duration", value: null }]);
+	expect((await planner.summaries(session.id))[0].types).toMatchObject([{ typeId: type, status: "Planned" }]);
+	const { installationEpoch, taskRevision, subtypeRevision, workflowRevision } = planned;
+	const logged = await planner.call(path + "/subtypes/" + type + "/actions/log", "POST", {
+		installationEpoch, taskRevision, subtypeRevision, workflowRevision, commandId: crypto.randomUUID(),
+		input: { day: "2026-11-26", minutes: 45 },
+	});
+	expect(logged.status).toBe(200);
+	expect((await workflow()).properties).toEqual([{ label: "Duration", value: "45 min" }]);
+	expect((await planner.summaries(session.id))[0].types).toMatchObject([{ typeId: type, status: "Logged" }]);
+});

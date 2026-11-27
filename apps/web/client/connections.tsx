@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { paths } from "./openapi.d.ts";
 import { api } from "./query.ts";
+import { connectorKind, connectorLabels, type ConnectorKind as Kind } from "@2do/api/connectors";
 
-type Kind = "gmail" | "google-calendar";
 type Status =
   paths["/api/connections/{kind}"]["get"]["responses"][200]["content"]["application/json"];
 type Directions = Status["directions"];
@@ -12,7 +12,7 @@ const key = (kind: Kind) => ["planner", "connections", kind];
 async function authorize(kind: Kind, options: Directions) {
   const { data } = await api.POST("/api/connections/{kind}/authorize", {
     params: { path: { kind } },
-    body: options,
+    body: kind === "google-calendar" ? options : {},
   });
   if (!data) throw new Error("Could not start Google sign-in.");
   window.location.assign(data.url);
@@ -25,6 +25,35 @@ function useConnection(kind: Kind) {
     refetchInterval: (query) => (query.state.data?.account ? 30_000 : false),
   });
 }
+
+function RecentWorkouts() {
+  const { data, error } = useQuery({
+    queryKey: ["planner", "connections", "google-health", "workouts"],
+    queryFn: async () => (await api.GET("/api/connections/google-health/workouts")).data!,
+    refetchInterval: 30_000,
+  });
+  if (error) return <p role="alert">{error.message}</p>;
+  if (!data?.length) return null;
+  return (
+    <div>
+      <h3>Recent workouts</h3>
+      <ul>
+        {data.map((row, index) => (
+          <li key={row.start + row.activity + index}>
+            {new Date(row.start).toLocaleDateString()} · {row.activity} · {Number(row.minutes.toFixed(1))} min
+            {row.km !== null && ` · ${Number(row.km.toFixed(2))} km`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const descriptions: Record<Kind, string> = {
+  gmail: "Track new inbox messages. You can enable task suggestions for this account.",
+  "google-calendar": "Import your primary calendar and publish selected events to a dedicated 2do calendar.",
+  "google-health": "With Fitness enabled, 2do stores your Fitbit and Pixel Watch workout type, time, minutes and distance for activity reports and goals. Copilot and your connected planner tools can read those totals. Import starts 30 days back and checks every 15 minutes. Disconnecting removes the imported workouts and their goal credit.",
+};
 
 function Connection({ kind }: { kind: Kind }) {
   const client = useQueryClient();
@@ -43,17 +72,21 @@ function Connection({ kind }: { kind: Kind }) {
         if (!data?.authorized) await authorize(kind, action);
       }
     },
-    onSettled: () => client.invalidateQueries({ queryKey: key(kind) }),
+    onSettled: () => {
+      if (kind === "google-health") void client.invalidateQueries({ queryKey: ["planner", "reports"] });
+      return client.invalidateQueries({ queryKey: key(kind) });
+    },
+  });
+  const suggestions = useMutation({
+    mutationFn: (enabled:boolean) => api.PUT("/api/connections/gmail/suggestions", {body:{enabled}}),
+    onSuccess: () => client.invalidateQueries({queryKey:key(kind)}),
   });
   const status = query.data;
   return (
-    <section className="connection-card">
-      <h2>{kind === "gmail" ? "Gmail" : "Google Calendar"}</h2>
-      <p>
-        {kind === "gmail"
-          ? "Receive new inbox messages. 2do records delivery without reading the body or sending replies."
-          : "Import your primary calendar and publish selected events to a dedicated 2do calendar."}
-      </p>
+    <section className="connection-card" id={"connection-" + kind} tabIndex={-1}>
+      <h2>{connectorLabels[kind]}</h2>
+      <p>{descriptions[kind]}</p>
+      {status?.account && kind === "google-health" && <RecentWorkouts />}
       {status?.account && (
         <p>
           <strong>{status.account}</strong> ·{" "}
@@ -62,6 +95,12 @@ function Connection({ kind }: { kind: Kind }) {
             : "Waiting for first sync"}
         </p>
       )}
+      {status?.account && kind === "gmail" && <label>
+        <input type="checkbox" id="gmail-suggestions" checked={!!status.mailSuggestions} disabled={suggestions.isPending}
+          onChange={event => suggestions.mutate(event.target.checked)} />
+        Use Workers AI to suggest tasks from new email subjects and short excerpts in Needs attention
+      </label>}
+      {suggestions.error && <p role="alert">{suggestions.error.message}</p>}
       {status && kind === "google-calendar" && (
         <fieldset disabled={mutation.isPending}>
           <legend>Sync directions</legend>
@@ -118,8 +157,7 @@ function Connection({ kind }: { kind: Kind }) {
 export function Connections() {
   return (
     <div className="connections">
-      <Connection kind="gmail" />
-      <Connection kind="google-calendar" />
+      {connectorKind.options.map((kind) => <Connection key={kind} kind={kind} />)}
     </div>
   );
 }

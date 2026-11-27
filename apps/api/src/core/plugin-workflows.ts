@@ -77,6 +77,13 @@ export class PluginWorkflows {
     this.db.forget(taskId, typeId);
     this.reports.replaceObservations(taskId, typeId, "", []);
   }
+  summaryStatus(subtype: TaskSubtype, state: { version: number; document: PluginData } | null) {
+    const definition = this.types.get(subtype.typeId)?.definition;
+    const flow = definition?.workflow;
+    if (!flow?.summaryStatus || definition?.schemaVersion !== subtype.schemaVersion ||
+        (state && state.version !== flow.version)) return;
+    return flow.summaryStatus(flow.schema.parse(state?.document ?? flow.initial));
+  }
   describe(
     task: Task,
     subtype: TaskSubtype,
@@ -104,6 +111,7 @@ export class PluginWorkflows {
       workflowRevision: row?.revision ?? null,
       pending,
       status: view.status,
+      properties: view.properties,
       actions: view.actions.map((action) => {
         const command = flow.commands.find((c) => c.id === action.id);
         if (!command) throw new Error("Undeclared workflow action " + action.id);

@@ -33,7 +33,7 @@ const cases = [
 
 const classifier = ClefTaskClassifier.using({
 	run(model, payload) {
-		return JSON.parse(
+		return new Response(
 			execFileSync("cf", ["ai", "run", model, "--body", JSON.stringify(payload)], {
 				encoding: "utf8",
 				stdio: ["ignore", "pipe", "inherit"],

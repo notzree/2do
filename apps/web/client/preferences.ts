@@ -22,7 +22,8 @@ export const commands = [
   { id: "nextMonth", name: nextPeriods.nextMonth, key: "m" },
   { id: "previousMonth", name: previousPeriods.previousMonth, key: "b" },
   { id: "today", name: "Go to today", key: "t" },
-  { id: "copilot", name: "Open Agent", key: "a" },
+  { id: "agents", name: "Open Agents workspace", key: "a" },
+  { id: "copilot", name: "Open quick chat", key: "q" },
   { id: "settings", name: "Open Settings", key: "s" },
 ] as const;
 export type Command = (typeof commands)[number]["id"];
@@ -50,6 +51,11 @@ export const defaults: Preferences = {
 export const storageKey = "2do.preferences.v1";
 
 function restoreBindings(stored: Partial<Bindings> | undefined): Bindings {
+  // Before Agents had its own binding, saved defaults included copilot: "a".
+  if (stored?.agents === undefined && stored?.copilot === "a") {
+    stored = { ...stored };
+    delete stored.copilot;
+  }
   const result = { ...defaultBindings };
   const used = new Set<string>();
   for (const { id } of commands) {

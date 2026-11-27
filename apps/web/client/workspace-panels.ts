@@ -2,7 +2,6 @@ import { create } from "zustand";
 
 type WorkspacePanel =
   | { kind: "chat" }
-  | { kind: "review" }
   | { kind: "task"; id: string; graph: boolean };
 
 export const useWorkspacePanels = create<{ activePanel: WorkspacePanel | null }>(() => ({

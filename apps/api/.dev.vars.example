@@ -10,3 +10,9 @@ LOCAL_PLANNER="enabled"
 # GMAIL_PUBSUB_TOPIC="projects/PROJECT/topics/gmail"
 # GMAIL_PUSH_SUBSCRIPTION="projects/PROJECT/subscriptions/2do"
 # GMAIL_PUSH_SERVICE_ACCOUNT="push@PROJECT.iam.gserviceaccount.com"
+
+# Optional Web Push delivery. Generate a key pair once with `npx web-push generate-vapid-keys`.
+# Set WEB_PUSH_PRIVATE_KEY as a Worker secret. Use a mailto: contact or an HTTPS URL for the subject.
+# WEB_PUSH_PUBLIC_KEY=""
+# WEB_PUSH_PRIVATE_KEY=""
+# WEB_PUSH_SUBJECT="mailto:planner@example.com"

@@ -1,3 +1,4 @@
+import { stepNotebookSurface } from "./notebook-focus.ts";
 import { expect, it, vi } from "vite-plus/test";
 import { getSchema } from "@tiptap/core";
 import { EditorState, NodeSelection, TextSelection } from "@tiptap/pm/state";
@@ -8,9 +9,8 @@ import {
 	bindNotebookEditorEvents,
 	NotebookVim,
 	normalSelection,
-	stepNotebookSurface,
 } from "./editor-navigation.ts";
-import { deleteCurrentBlock, removeDeletedTask, stepLine } from "./editor-keys.ts";
+import { deleteCurrentBlock, deleteEmptyLine, removeDeletedTask, stepLine } from "./editor-keys.ts";
 
 function mockView(doc: Node, cursor: number) {
 	let state = EditorState.create({ doc, selection: TextSelection.create(doc, cursor) });
@@ -30,6 +30,54 @@ function mockView(doc: Node, cursor: number) {
 }
 
 const schema = getSchema(editorExtensions());
+
+it("enters Insert from the notebook shell at the selected day's existing caret", () => {
+	const doc = schema.node("doc", null, [schema.node("paragraph", null, schema.text("note"))]);
+	const { view, dom, focus } = mockView(doc, 3);
+	const setMode = vi.fn();
+	const unbind = bindNotebookEditorEvents(view, setMode);
+	dom.dispatchEvent(new Event("notebook-insert"));
+	expect(focus).toHaveBeenCalledOnce();
+	expect(setMode).toHaveBeenCalledExactlyOnceWith("Insert");
+	expect(view.state.selection.from).toBe(3);
+	expect(view.state.doc).toBe(doc);
+	unbind();
+});
+
+it.each([-1, 1] as const)("removes a blank edge line in direction %s, preserving the adjacent heading", (direction) => {
+	const blank = schema.node("paragraph");
+	const heading = schema.node("heading", null, schema.text("Title"));
+	const leading = direction === -1;
+	const doc = schema.node("doc", null, leading ? [blank, heading] : [heading, blank]);
+	const { view } = mockView(doc, leading ? 1 : heading.nodeSize + 1);
+	expect(deleteEmptyLine(view, direction)).toBe(true);
+	expect(view.state.doc.content.content).toEqual([heading]);
+	expect(view.state.selection.$head.parentOffset).toBe(leading ? 0 : heading.content.size);
+});
+
+it.each([-1, 1] as const)("deletes only the blank line between task references in direction %s", (direction) => {
+	const first = schema.node("taskRef", { id: crypto.randomUUID() });
+	const last = schema.node("taskRef", { id: crypto.randomUUID() });
+	const doc = schema.node("doc", null, [first, schema.node("paragraph"), last]);
+	const { view } = mockView(doc, first.nodeSize + 1);
+	expect(deleteEmptyLine(view, direction)).toBe(true);
+	expect(view.state.doc.content.content).toEqual([first, last]);
+	expect((view.state.selection as NodeSelection).node).toBe(direction === -1 ? first : last);
+});
+
+it("leaves ordinary text, range deletions and the day's sole empty line to the editor", () => {
+	const blank = schema.node("paragraph");
+	const note = schema.node("paragraph", null, schema.text("note"));
+	const doc = schema.node("doc", null, [blank, note]);
+	const { view } = mockView(doc, blank.nodeSize + 1);
+	expect(deleteEmptyLine(view, -1)).toBe(false);
+	view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, 1, blank.nodeSize + 2)));
+	expect(deleteEmptyLine(view, 1)).toBe(false);
+	expect(view.state.doc).toBe(doc);
+	const only = mockView(schema.node("doc", null, blank), 1);
+	expect(deleteEmptyLine(only.view, -1)).toBe(false);
+	expect(deleteEmptyLine(only.view, 1)).toBe(false);
+});
 
 it("enters the adjacent day's editor in Normal mode at its first or last line", () => {
 	const doc = schema.nodeFromJSON({

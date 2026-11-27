@@ -1,5 +1,6 @@
 import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { drizzle } from "drizzle-orm/durable-sqlite";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { expect, it } from "vite-plus/test";
 import migrations from "../drizzle/migrations.js";
 import { migratePlanner } from "../src/db/migrate.ts";
@@ -141,6 +142,16 @@ it("rolls the whole bridge back when a legacy task cannot be imported", async ()
 	});
 });
 
+async function migrateUpTo(storage: DurableObjectStorage, exclusiveTag: string) {
+	await storage.deleteAll();
+	const index = migrations.journal.entries.findIndex(step => step.tag === exclusiveTag);
+	expect(index).toBeGreaterThan(0);
+	await migrate(drizzle(storage), {
+		...migrations,
+		journal: { ...migrations.journal, entries: migrations.journal.entries.slice(0, index) },
+	});
+}
+
 it("upgrades saved metric targets to core goals once while retaining their reporting history",async()=>{
 	const stub=env.USER_PLANNER.getByName(crypto.randomUUID());
 	const id=crypto.randomUUID(), revision=crypto.randomUUID();
@@ -148,16 +159,74 @@ it("upgrades saved metric targets to core goals once while retaining their repor
 		versions:[{effectiveFrom:"2026-11-01",target:{comparator:"atLeast",value:50}},{effectiveFrom:"2026-11-12",target:{comparator:"atLeast",value:60}}]};
 	await runInDurableObject(stub,async(_,ctx)=>{
 		const sql=ctx.storage.sql;
-		// Recreate the pre-goal storage boundary on this new, isolated test planner.
-		sql.exec("DROP TABLE goal_task_link; DROP TABLE goal_check_in; DROP TABLE planner_goal");
-		const step=migrations.journal.entries.find(e=>e.tag.endsWith("planner_goals"))!;
-		sql.exec("DELETE FROM __drizzle_migrations WHERE created_at >= ?",step.when);
+		await migrateUpTo(ctx.storage, "0009_planner_goals");
 		sql.exec("INSERT INTO plugin_goal(id,creation,document) VALUES(?,?,?)",id,"original request",JSON.stringify(old));
 		await migratePlanner(drizzle(ctx.storage));
 		await migratePlanner(drizzle(ctx.storage));
 		expect(sql.exec("SELECT COUNT(*) AS count FROM planner_goal").one().count).toBe(1);
 	});
+	await evictDurableObject(stub);
 	await (await stub.fetch("https://test/api/task-plugins/nutrition",{method:"PUT",headers:{"content-type":"application/json"},body:'{"enabled":true}'})).json();
 	expect(await (await stub.fetch("https://test/api/planner-goals")).json()).toMatchObject([{id,title:old.label,dailyMetric:"nutrition.protein"}]);
 	expect(await (await stub.fetch("https://test/api/goals/"+id+"/history?from=2026-11-01&to=2026-11-13")).json()).toMatchObject({goal:old});
+});
+
+it("keeps existing side-chat IDs and indexes pre-workspace inbox records exactly once", async () => {
+	const owner = crypto.randomUUID(), chat = crypto.randomUUID(), item = crypto.randomUUID();
+	const stub = env.USER_PLANNER.getByName(owner);
+	const at = "2026-11-26T10:42:00.000Z";
+	await runInDurableObject(stub, async (_, { storage }) => {
+		await migrateUpTo(storage, "0012_agents_workspace");
+		const sql = storage.sql;
+		sql.exec("INSERT INTO side_chat (id, title, createdAt) VALUES (?, ?, ?)", chat, "Exam", Date.parse(at));
+		sql.exec(
+			"INSERT INTO agent_inbox (id, kind, status, createdAt, document) VALUES (?, 'question', 'pending', ?, ?)",
+			item, at, JSON.stringify({ title: "Which chapter?", body: "Pick a chapter.", conversation: "side:" + chat + ":" + owner }),
+		);
+		await migratePlanner(drizzle(storage));
+		await migratePlanner(drizzle(storage));
+		expect(sql.exec("SELECT archivedAt FROM side_chat WHERE id = ?", chat).one()).toEqual({ archivedAt: null });
+		expect(sql.exec("SELECT chat, itemId, at FROM agent_activity WHERE itemId = ?", item).toArray())
+			.toEqual([{ chat, itemId: item, at }]);
+	});
+	const pending = await stub.fetch("https://test/api/agent/inbox?view=action&chat=" + chat);
+	expect(await pending.json()).toMatchObject({ items: [{ id: item, status: "pending", conversation: chat }] });
+});
+
+it.each([false, true])("recovers the already-applied directory migration with partial workspace schema = %s", async (partial) => {
+	const owner = crypto.randomUUID(), chat = crypto.randomUUID(), item = crypto.randomUUID();
+	const stub = env.USER_PLANNER.getByName(owner);
+	const at = "2026-11-26T10:42:00.000Z";
+	await runInDurableObject(stub, async (_, { storage }) => {
+		await migrateUpTo(storage, "0012_agents_workspace");
+		const index = migrations.journal.entries.findIndex(step => step.tag === "0012_agents_workspace");
+		const store = drizzle(storage);
+		// This version was journaled by the running dev planner before the workspace tables existed.
+		await migrate(store, {
+			journal: { ...migrations.journal, entries: migrations.journal.entries.slice(0, index + 1) },
+			migrations: {
+				...migrations.migrations,
+				m0012: "ALTER TABLE side_chat ADD archivedAt integer;\n--> statement-breakpoint\nALTER TABLE side_chat ADD branch text;",
+			},
+		});
+		const sql = storage.sql;
+		sql.exec("INSERT INTO side_chat (id, title, createdAt, archivedAt) VALUES (?, 'Existing desk', ?, ?)", chat, Date.parse(at), Date.parse(at));
+		sql.exec("INSERT INTO agent_inbox (id, kind, status, createdAt, document) VALUES (?, 'question', 'pending', ?, ?)",
+			item, at, JSON.stringify({title:"Original question",body:"Choose a day."}));
+		if (partial) {
+			sql.exec("CREATE TABLE agent_item_link (chat TEXT NOT NULL, item TEXT NOT NULL REFERENCES agent_inbox(id), PRIMARY KEY(chat,item))");
+			sql.exec("INSERT INTO agent_item_link (chat,item) VALUES (?,?)", chat, item);
+		}
+		await migratePlanner(store);
+		await migratePlanner(store);
+		const names = sql.exec<{name:string}>("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('agent_activity','agent_flight','agent_device_origin','agent_item_link')").toArray();
+		expect(names).toHaveLength(4);
+		expect(sql.exec("SELECT COUNT(*) AS count FROM agent_activity WHERE itemId = ?", item).one().count).toBe(1);
+		expect(sql.exec("SELECT title, archivedAt FROM side_chat WHERE id = ?", chat).one()).toEqual({title:"Existing desk",archivedAt:Date.parse(at)});
+	});
+	await evictDurableObject(stub);
+	const check = (path:string) => stub.fetch("https://test/api/" + path).then(response=>response.json());
+	expect(await check("agent/inbox?view=action")).toMatchObject({needsAction:1,items:[{id:item}]});
+	expect(await check("agents/activity")).toMatchObject({items:[{itemId:item,chat:"me"}]});
+	if (partial) expect(await check("agent/inbox?view=action&chat="+chat)).toMatchObject({items:[{id:item}]});
 });

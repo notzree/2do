@@ -378,6 +378,10 @@ it("protects pre-upgrade confirmed logs and leaves an unconfirmed suggestion tit
         type,
       );
     }
+    // Recreate the schema that preceded the confirmed-log migration while retaining the two captured tasks.
+    sql.exec("DROP TABLE connected_workout_metric; DROP TABLE connected_workout");
+    sql.exec("DROP TRIGGER agent_activity_insert; DROP TRIGGER agent_activity_transition; DROP TRIGGER agent_activity_origin; DROP TABLE agent_message_fts; DROP TABLE agent_message; DROP TABLE agent_item_link; DROP TABLE agent_activity; DROP TABLE agent_delivery; DROP TABLE agent_history_job; DROP TABLE agent_turn_scope; DROP TABLE agent_flight; DROP TABLE agent_device_origin; DROP TABLE agent_milestone_source; DROP TABLE agent_delivery_settlement; ALTER TABLE side_chat DROP COLUMN branch; ALTER TABLE side_chat DROP COLUMN archivedAt");
+    sql.exec("DROP TRIGGER inbox_time_insert; DROP TRIGGER inbox_time_update; DROP TRIGGER inbox_time_delete; DROP TABLE agent_inbox");
     const step = migrations.journal.entries.find((e) => e.tag.endsWith("preserve_confirmed_logs"))!;
     sql.exec("DELETE FROM __drizzle_migrations WHERE created_at >= ?", step.when);
     await migratePlanner(drizzle(ctx.storage));

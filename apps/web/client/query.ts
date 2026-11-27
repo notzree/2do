@@ -1,3 +1,4 @@
+import { rememberPushScope } from "./push-scope.ts";
 import createClient from "openapi-fetch";
 import type { paths } from "./openapi.d.ts";
 import { QueryClient, queryOptions } from "@tanstack/react-query";
@@ -7,7 +8,10 @@ export const queryClient = new QueryClient({
 	defaultOptions: { queries: { staleTime: 15_000, retry: 1 } },
 });
 export const planKey = ["planner", "tasks"] as const;
-export const refreshPlanner = () => queryClient.invalidateQueries({ queryKey: ["planner"] });
+export const refreshPlanner = () => Promise.all([
+  queryClient.invalidateQueries({queryKey:["planner"]}),
+  queryClient.invalidateQueries({queryKey:["chats"]}),
+]);
 
 export function pageQuery(date: string) {
 	return queryOptions({
@@ -50,7 +54,10 @@ api.use({
 			}
 			throw new PlannerRequestError(412, "The active planner changed. Reopen this account to recover its drafts.");
 		}
-		if (scope) verifiedScope = scope;
+		if (scope && verifiedScope !== scope) {
+			verifiedScope = scope;
+			void rememberPushScope(scope).catch(() => {});
+		}
 		if (!response.ok) {
 			const body = await response.json().catch(() => null);
 			throw new PlannerRequestError(
@@ -68,3 +75,5 @@ api.use({
 			throw new Error("Could not reach your planner. Reload to sign in again.");
 	},
 });
+
+export const getVerifiedScope = () => verifiedScope;

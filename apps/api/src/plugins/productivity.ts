@@ -11,7 +11,7 @@ import {
 } from "./session-log.ts";
 const project = textField({
   key: "project",
-  label: "Project or course",
+  label: "Project / courses",
   maxLength: 120,
   inlayLabel: "Project",
 });
@@ -45,7 +45,8 @@ export const productivityPlugin: TaskPlugin = {
       },
       workflow: logWorkflow({
         schema: entry,
-        action: { id: "log", label: "Log work session", fields: [dateField, minutesField] },
+        action: { id: "log", label: "Log session", fields: [dateField, minutesField] },
+        properties: (entry) => [{ label: "Duration", value: entry ? entry.minutes + " min" : null }],
         defaults({ task, timeZone, today }) {
           const d: Record<string, string | number> = { day: logDay(task, timeZone, today) };
           if (task.durationMinutes) d.minutes = task.durationMinutes;

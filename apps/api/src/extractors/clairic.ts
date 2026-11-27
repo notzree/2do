@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runJsonModel, type PlannerAiBinding } from "../workers-ai.ts";
 
 export type ExtractionField = {
   path: string;
@@ -23,7 +24,7 @@ const output = z.object({
   truncated: z.boolean().optional(),
 });
 
-export function clairicExtractor(ai: Pick<Ai, "run">): TitleExtractor {
+export function clairicExtractor(ai: PlannerAiBinding): TitleExtractor {
   return async (title, fields, signal, referenceDate) => {
     const specs = Object.fromEntries(
       fields.map(({ kind, instructions, modelKey }, i) => [
@@ -34,7 +35,8 @@ export function clairicExtractor(ai: Pick<Ai, "run">): TitleExtractor {
       ]),
     );
     const result = output.parse(
-      await ai.run(
+      await runJsonModel(
+        ai,
         "@cf/cloudflare/clairic",
         {
           model: "clairic",
@@ -42,7 +44,7 @@ export function clairicExtractor(ai: Pick<Ai, "run">): TitleExtractor {
           fields: specs,
           ...(referenceDate && { reference_date: referenceDate }),
         },
-        { signal },
+        signal,
       ),
     );
     if (result.truncated) throw new Error("Incomplete title extraction");

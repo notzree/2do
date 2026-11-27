@@ -11,7 +11,7 @@ const exec = promisify(execFile);
 const classifier = ClefTaskClassifier.using({
   async run(model, payload) {
     const { stdout } = await exec("cf", ["ai", "run", model, "--body", JSON.stringify(payload)]);
-    return JSON.parse(stdout);
+    return new Response(stdout);
   },
 });
 const all = [nutritionPlugin, fitnessPlugin, budgetingPlugin, productivityPlugin];

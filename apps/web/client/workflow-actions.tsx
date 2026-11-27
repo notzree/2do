@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { ArrowRight, Clock3 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { TaskDetails } from "@2do/api/task-plugins";
 import { imageMimeTypes } from "@2do/api/notebook";
@@ -7,6 +8,9 @@ import { uploadImage } from "./upload-image.ts";
 
 type Workflow = NonNullable<TaskDetails["workflows"]>[number];
 type Action = Workflow["actions"][number];
+function focusFirstField(form: HTMLFormElement | null) {
+  form?.querySelector<HTMLElement>("input, select, textarea")?.focus();
+}
 function openDraft(action: Action, workflow: Workflow) {
   return {
     commandId: crypto.randomUUID(),
@@ -83,14 +87,124 @@ function ImageField({
   );
 }
 
+function WorkflowInput({
+  field,
+  value,
+  file,
+  disabled,
+  change,
+}: {
+  field: Action["fields"][number];
+  value: string;
+  file?: File;
+  disabled: boolean;
+  change: (value: string, file?: File) => void;
+}) {
+  if (field.kind === "image")
+    return (
+      <ImageField
+        label={field.label}
+        required={field.required}
+        disabled={disabled}
+        file={file}
+        id={value}
+        change={(file) => change("", file)}
+      />
+    );
+  const props = { required: field.required, disabled, value };
+  return (
+    <label>
+      {field.label}
+      {field.kind === "choice" ? (
+        <select {...props} onChange={(e) => change(e.currentTarget.value)}>
+          <option value="">Choose…</option>
+          {field.options.map((option) => (
+            <option key={option}>{option}</option>
+          ))}
+        </select>
+      ) : field.kind === "text" ? (
+        <textarea
+          {...props}
+          rows={3}
+          maxLength={field.maxLength}
+          onChange={(e) => change(e.currentTarget.value)}
+        />
+      ) : (
+        <input
+          {...props}
+          type={field.kind}
+          min={field.kind === "number" ? field.min : undefined}
+          step={field.kind === "number" ? "any" : undefined}
+          onChange={(e) => change(e.currentTarget.value)}
+        />
+      )}
+    </label>
+  );
+}
+
+async function submitWorkflowAction(
+  taskId: string,
+  typeId: string,
+  action: Action,
+  draft: ReturnType<typeof openDraft>,
+) {
+  const { values, files, ...revisions } = draft;
+  const input: Record<string, number | string> = {};
+  for (const field of action.fields) {
+    const text = values[field.key]?.trim();
+    const photo = files[field.key];
+    if (field.kind === "image" && photo) input[field.key] = await uploadImage(photo);
+    else if (text) input[field.key] = field.kind === "number" ? Number(text) : text;
+  }
+  return api.POST("/api/tasks/{id}/subtypes/{typeId}/actions/{actionId}", {
+    params: { path: { id: taskId, typeId, actionId: action.id } },
+    body: { ...revisions, input },
+  });
+}
+
+function ActionTrigger({
+  action,
+  compact,
+  logShortcut,
+  begin,
+}: {
+  action: Action;
+  compact: boolean;
+  logShortcut: boolean;
+  begin: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={begin}
+      className={compact ? "property-action" : undefined}
+      data-log-shortcut={logShortcut || undefined}
+      aria-keyshortcuts={logShortcut ? "L" : undefined}
+    >
+      {compact &&
+        (action.id === "log" ? (
+          <Clock3 size={14} aria-hidden="true" />
+        ) : (
+          <ArrowRight size={14} aria-hidden="true" />
+        ))}
+      {action.label}
+      {logShortcut && <kbd aria-hidden="true">l</kbd>}
+    </button>
+  );
+}
+
 function ActionForm({
   taskId,
   workflow,
   action,
+  compact,
+  logShortcut,
 }: {
   taskId: string;
   workflow: Workflow;
   action: Action;
+  compact: boolean;
+  logShortcut: boolean;
 }) {
   const [draft, setDraft] = useState<ReturnType<typeof openDraft>>();
   const stale =
@@ -100,20 +214,8 @@ function ActionForm({
       draft.taskRevision !== workflow.taskRevision ||
       draft.subtypeRevision !== workflow.subtypeRevision);
   const mutation = useMutation({
-    mutationFn: async (base: ReturnType<typeof openDraft>) => {
-      const { values, files, ...revisions } = base;
-      const input: Record<string, number | string> = {};
-      for (const field of action.fields) {
-        const text = values[field.key]?.trim();
-        const photo = files[field.key];
-        if (field.kind === "image" && photo) input[field.key] = await uploadImage(photo);
-        else if (text) input[field.key] = field.kind === "number" ? Number(text) : text;
-      }
-      return api.POST("/api/tasks/{id}/subtypes/{typeId}/actions/{actionId}", {
-        params: { path: { id: taskId, typeId: workflow.typeId, actionId: action.id } },
-        body: { ...revisions, input },
-      });
-    },
+    mutationFn: (base: ReturnType<typeof openDraft>) =>
+      submitWorkflowAction(taskId, workflow.typeId, action, base),
     onSuccess: () => setDraft(undefined),
     onSettled: () =>
       Promise.all([
@@ -133,9 +235,7 @@ function ActionForm({
   }
   if (!draft)
     return (
-      <button type="button" onClick={begin}>
-        {action.label}
-      </button>
+      <ActionTrigger action={action} compact={compact} logShortcut={logShortcut} begin={begin} />
     );
   function edit(key: string, value: string, file?: File) {
     setDraft(
@@ -149,48 +249,22 @@ function ActionForm({
     );
   }
   return (
-    <form className="editor workflow-form" onSubmit={submit} aria-label={action.label}>
-      {action.fields.map((field) =>
-        field.kind === "image" ? (
-          <ImageField
-            key={field.key}
-            label={field.label}
-            required={field.required}
-            disabled={!!(mutation.isPending || stale)}
-            file={draft.files[field.key]}
-            id={draft.values[field.key]}
-            change={(file) => edit(field.key, "", file)}
-          />
-        ) : (
-          <label key={field.key}>
-            {field.label}
-            {field.kind === "choice" ? (
-              <select required={field.required} disabled={mutation.isPending || stale} value={draft.values[field.key] ?? ""}
-                onChange={e=>edit(field.key,e.target.value)}><option value="">Choose…</option>
-                {field.options.map(v=><option key={v}>{v}</option>)}</select>
-            ) : field.kind === "text" ? (
-              <textarea
-                rows={3}
-                maxLength={field.maxLength}
-                required={field.required}
-                disabled={mutation.isPending || stale}
-                value={draft.values[field.key] ?? ""}
-                onChange={(e) => edit(field.key, e.currentTarget.value)}
-              />
-            ) : (
-              <input
-                type={field.kind}
-                min={field.kind === "number" ? field.min : undefined}
-                step={field.kind === "number" ? "any" : undefined}
-                required={field.required}
-                disabled={mutation.isPending || stale}
-                value={draft.values[field.key] ?? ""}
-                onChange={(e) => edit(field.key, e.currentTarget.value)}
-              />
-            )}
-          </label>
-        ),
-      )}
+    <form
+      className="editor workflow-form"
+      onSubmit={submit}
+      aria-label={action.label}
+      ref={compact ? focusFirstField : undefined}
+    >
+      {action.fields.map((field) => (
+        <WorkflowInput
+          key={field.key}
+          field={field}
+          value={draft.values[field.key] ?? ""}
+          file={draft.files[field.key]}
+          disabled={mutation.isPending || !!stale}
+          change={(value, file) => edit(field.key, value, file)}
+        />
+      ))}
       {stale && <p role="status">This task changed. Reopen the action to use its latest values.</p>}
       {mutation.isError && (
         <p role="alert" className="error">
@@ -216,12 +290,30 @@ function ActionForm({
   );
 }
 
-export function WorkflowActions({ taskId, workflow }: { taskId: string; workflow: Workflow }) {
+export function WorkflowActions({
+  taskId,
+  workflow,
+  compact = false,
+  logShortcut = false,
+}: {
+  taskId: string;
+  workflow: Workflow;
+  compact?: boolean;
+  logShortcut?: boolean;
+}) {
+  if (compact && !workflow.actions.length) return null;
   return (
-    <div className="plugin-workflow">
-      <p role="status">{workflow.status}</p>
+    <div className={compact ? "property-actions" : "plugin-workflow"}>
+      {!compact && <p role="status">{workflow.status}</p>}
       {workflow.actions.map((action) => (
-        <ActionForm key={action.id} taskId={taskId} workflow={workflow} action={action} />
+        <ActionForm
+          key={action.id}
+          taskId={taskId}
+          workflow={workflow}
+          action={action}
+          compact={compact}
+          logShortcut={logShortcut && action.id === "log"}
+        />
       ))}
     </div>
   );

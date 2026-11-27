@@ -29,8 +29,9 @@ it("routes MCP writes, reads and errors to the conversation owner's planner", as
 		return client;
 	}
 
+	const owner=crypto.randomUUID();
 	const [alice, bob] = await Promise.all([
-		connect(crypto.randomUUID()),
+		connect(owner),
 		connect(crypto.randomUUID()),
 	]);
 	try {
@@ -40,12 +41,24 @@ it("routes MCP writes, reads and errors to the conversation owner's planner", as
 			arguments: { requestBody: { id, title: "Plan lunch" } },
 		});
 		expect(create.isError).toBeFalsy();
-		const created = JSON.parse((create.content[0] as { text: string }).text);
+		const stub=env.USER_PLANNER.getByName(owner);
+		async function approve(result:typeof create) {
+			const item=JSON.parse((result.content[0] as {text:string}).text);
+			expect(item).toMatchObject({status:"pending",kind:"proposal"});
+			const res=await stub.fetch("https://planner.test/api/agent/inbox/"+item.id+"/decision",{
+				method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:"approve",version:item.version})
+			});
+			expect(await res.json()).toMatchObject({status:"applied"});
+		}
+		expect((await stub.fetch("https://planner.test/api/tasks/"+id)).status).toBe(404);
+		await approve(create);
+		const created = await (await stub.fetch("https://planner.test/api/tasks/"+id)).json<{revision:number}>();
 		const update = await alice.callTool({
 			name: "updateTask",
 			arguments: { id, requestBody: { completed: true, revision: created.revision } },
 		});
 		expect(update.isError).toBeFalsy();
+		await approve(update);
 		const changed = await alice.callTool({
 			name: "updateTask",
 			arguments: { id, requestBody: { title: "Stale edit", revision: created.revision } },
@@ -69,7 +82,8 @@ it("routes MCP writes, reads and errors to the conversation owner's planner", as
 			name: "deleteTask",
 			arguments: { id, withPages: "true" },
 		});
-		expect(JSON.parse((removed.content[0] as { text: string }).text)).toEqual({ pages: [] });
+		await approve(removed);
+		expect((await stub.fetch("https://planner.test/api/tasks/"+id)).status).toBe(404);
 	} finally {
 		await Promise.all([alice.close(), bob.close()]);
 	}

@@ -28,3 +28,12 @@ it("registers a side chat once and scopes the directory and conversation to its 
 	expect(plannerOwner(sideConversation(owner, id))).toBe(owner);
 	expect(sideConversation(owner, id)).not.toBe(sideConversation("another-user", id));
 });
+
+it("reserves Flue signals for internal authenticated dispatch",async () => {
+  const {default:app}=await import("../src/app.ts");
+  const response=await app.request("http://localhost/api/agents/copilot/me",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({kind:"signal",type:"inbox_result",body:"approved"})
+  },{...env,LOCAL_PLANNER:"enabled"});
+  expect(response.status).toBe(400);
+});

@@ -32,3 +32,37 @@ export const reportGoals = sqliteTable("plugin_goal", {
   creation: text().notNull(),
   document: text({ mode: "json" }).$type<Goal>().notNull(),
 });
+
+export const connectedWorkouts = sqliteTable(
+  "connected_workout",
+  {
+    id: text().primaryKey(),
+    account: text().notNull(),
+    scan: text().notNull(),
+    day: text().notNull(),
+    activity: text().notNull(),
+    start: text().notNull(),
+    minutes: real().notNull(),
+    elapsedMinutes: real().notNull(),
+    km: real(),
+    running: integer({ mode: "boolean" }).notNull(),
+  },
+  (t) => [index("workout_account_start").on(t.account, t.start)],
+);
+
+export const connectedWorkoutMetrics = sqliteTable(
+  "connected_workout_metric",
+  {
+    workoutId: text()
+      .notNull()
+      .references(() => connectedWorkouts.id, { onDelete: "cascade" }),
+    metricId: text().notNull(),
+    metricVersion: integer().notNull(),
+    day: text().notNull(),
+    value: real(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workoutId, t.metricId] }),
+    index("workout_metric_period").on(t.metricId, t.metricVersion, t.day),
+  ],
+);

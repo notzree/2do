@@ -15,14 +15,8 @@ import type {
 	TaskSearch,
 } from "../interfaces/plan.ts";
 
-export class PlannerError extends Error {
-	constructor(
-		readonly status: 404 | 409,
-		message: string,
-	) {
-		super(message);
-	}
-}
+import { PlannerError } from "./planner-error.ts";
+export { PlannerError } from "./planner-error.ts";
 
 export class Planner implements PlanReader {
 	constructor(
@@ -64,6 +58,31 @@ export class Planner implements PlanReader {
 		if (ordered.length !== tasks.length) throw new Error("Stored plan contains a cycle");
 		return { revision: this.db.revision(), tasks: ordered, edges };
 	}
+  reorderSubtasks(parentId:string, before:string[], after:string[]) {
+    this.get(parentId);
+    return this.db.transaction(() => {
+      // The agenda starts with topological plan order. Its stable sibling sort
+      // preserves that order for legacy children that have no explicit rank.
+      const children=this.plan().tasks.filter(t=>t.parentId===parentId).sort(
+        (a,b)=>(a.siblingOrder??Infinity)-(b.siblingOrder??Infinity));
+      if(children.length!==before.length || children.some((child,i)=>child.id!==before[i]))
+        throw new PlannerError(409,"The subtask order changed. Read the current order.");
+      const byId=new Map(children.map(t=>[t.id,t]));
+      if(after.length!==children.length || new Set(after).size!==after.length || after.some(id=>!byId.has(id)))
+        throw new PlannerError(409,"Choose every child of this task exactly once.");
+      if(before.every((id,i)=>id===after[i])) return {order:after};
+      const revision=this.db.revision()+1;
+      after.forEach((id,siblingOrder)=>{
+        const old=byId.get(id)!;
+        if(old.siblingOrder===siblingOrder) return;
+        const updated={...old,siblingOrder,revision};
+        this.db.update(updated);
+        this.onTaskChanged?.(updated,old);
+      });
+      this.db.advanceRevision();
+      return {order:after};
+    });
+  }
 	traverse(id: string, direction: Direction) {
 		this.get(id);
 		return this.db.reachable(id, direction);

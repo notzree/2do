@@ -1,3 +1,4 @@
+import { rememberChatEditor } from "./agent-editor.ts";
 import { carryOver } from "./carryover.tsx";
 import type { Task } from "@2do/api/plan";
 import { useStore } from "zustand";
@@ -41,8 +42,8 @@ import { type NotebookDoc } from "@2do/api/notebook";
 import { uploadImage } from "./upload-image.ts";
 import { dayBuffer, type DayBuffer } from "./day-buffer.ts";
 import { editorExtensions, notebookDocument } from "./editor-extensions.ts";
-import { bindNotebookEditorEvents, NotebookVim, type EditorMode } from "./editor-navigation.ts";
-import { addLine, lineStart, motion, moveLine, removeDeletedTask } from "./editor-keys.ts";
+import { beginNotebookInsert, bindNotebookEditorEvents, NotebookVim, type EditorMode } from "./editor-navigation.ts";
+import { addLine, deleteEmptyLine, lineStart, motion, moveLine, removeDeletedTask } from "./editor-keys.ts";
 import { carryoverShadowLabel, dayKey, formatDate, onDay, isCarryoverShadow } from "./calendar.ts";
 import { TaskList, type ListActions } from "./agenda.tsx";
 
@@ -210,6 +211,12 @@ const uploadPositions = new Plugin<Map<object, number>>({
 
 const WritingPlugins = Extension.create({
 	name: "writingPlugins",
+	addKeyboardShortcuts() {
+		return {
+			Backspace: () => deleteEmptyLine(this.editor.view, -1),
+			Delete: () => deleteEmptyLine(this.editor.view, 1),
+		};
+	},
 	addProseMirrorPlugins() {
 		return [uploadPositions, slashPlugin];
 	},
@@ -409,7 +416,9 @@ function WritingSurface({
 						opts.navigation?.go(command);
 						return true;
 					}
-					if (titleCaret && editSelectedTaskTitle(view, titleCaret)) return true;
+					if (event.key === "Enter" && editSelectedTaskTitle(view, "start")) return true;
+					if (editor && beginNotebookInsert(view, key, () => editor.commands.enterInsertMode()))
+						return true;
 					if (key === "z" && opts.toggleFocus) {
 						if (!event.repeat) opts.toggleFocus();
 						return true;
@@ -435,15 +444,6 @@ function WritingSurface({
 					}
 					if (key === "J" || key === "K") {
 						moveLine(view, key === "J" ? 1 : -1);
-						return true;
-					}
-					if (["i", "I", "a", "A", "o", "O"].includes(key)) {
-						if (key === "o" || key === "O" || view.state.selection instanceof NodeSelection)
-							addLine(view, key === "O" || key.toLowerCase() === "i");
-						else if (key === "a") motion(view, "l");
-						else if (key === "A") motion(view, "$");
-						else if (key === "I") motion(view, "^");
-						editor?.commands.enterInsertMode();
 						return true;
 					}
 					const pos = lineStart(view);
@@ -478,7 +478,8 @@ function WritingSurface({
 				},
 			},
 			onCreate({ editor }) {
-				editorRef.current = editor;
+				// Tiptap can finish creating a discarded StrictMode instance after the live one mounts.
+				if (editor !== editorRef.current) return;
 				setMode(modeOf(editor));
 				syncView(editor.view);
 			},
@@ -544,7 +545,7 @@ function WritingSurface({
 		<div
 			className="writing-surface"
 			data-mode={vim ? mode : "Insert"}
-			onFocus={() => setActive(true)}
+			onFocus={() => {setActive(true); if (tiptapEditor) rememberChatEditor(tiptapEditor);}}
 			onBlur={(event) => {
 				if (!event.currentTarget.contains(event.relatedTarget)) {
 					keySequence.current.key = "";

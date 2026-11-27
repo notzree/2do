@@ -1,0 +1,326 @@
+#root:has(> .agents-workspace) {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.agents-workspace {
+  flex: 1;
+  min-height: 0;
+  margin-inline-start: var(--notebook-rail-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+}
+.agents-page-head > button,
+.agents-search,
+.timeline-byline,
+.timeline-event > a,
+.agent-dialog .primary,
+.message-branch,
+.workspace-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.agents-page-head > button,
+.message-branch {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+}
+.agent-sections {
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+.agent-sections > span, .agent-sections a {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+  white-space: nowrap;
+}
+.agent-sections a {
+  padding: .35rem 0;
+  font: inherit;
+  color: inherit;
+  text-transform: none;
+}
+.agent-sections a::before {
+  content: "";
+  height: 1em;
+  border-inline-start: 1px solid var(--line);
+}
+.agent-sections a[aria-current=page] { background: transparent; color: var(--ink); font-weight: 600; }
+.agent-sections a:hover { color: var(--ink); }
+.agents-page-head h1, .agents-empty h2 {
+  margin: 0;
+  font-family: "Baskervville", Georgia, serif;
+  font-weight: 450;
+  line-height: 1.1;
+  letter-spacing: normal;
+  color: var(--ink);
+}
+.agents-content {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+}
+.agents-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 1.1rem clamp(1rem, 3.5vw, 3.5rem) 1.2rem;
+  border-bottom: 1px solid var(--line);
+}
+.agents-page-head h1 {
+  font-size: clamp(1.65rem, 3.4vw, 2.4rem);
+  overflow-wrap: anywhere;
+}
+.agents-page-head small {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  margin-top: 0.55rem;
+}
+.agents-list-pane {
+  padding: 1.2rem clamp(0.85rem, 3.5vw, 3.5rem);
+  overflow: auto;
+}
+.agents-search {
+  color: var(--muted);
+  margin-bottom: 0.8rem;
+}
+.agents-search input {
+  min-width: 0;
+  width: min(100%, 27rem);
+  font-size: 0.87rem;
+}
+.agent-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 0.45rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.agent-list-row:hover {
+  background: var(--soft);
+}
+.agent-list-row > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.agent-list-row strong,
+.agent-list-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.agent-list-row small,
+.agent-list-row time {
+  color: var(--muted);
+  font-size: 0.77rem;
+}
+.activity-symbol {
+  display: grid;
+  place-content: center;
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.4rem;
+  background: var(--soft);
+  color: var(--accent);
+}
+.activity-symbol.pending {
+  color: var(--warn);
+}
+.activity-symbol svg {
+  width: 1rem;
+  height: 1rem;
+}
+.agents-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.8rem;
+  margin: clamp(2.5rem, 10vh, 6rem) auto;
+  color: var(--muted);
+}
+.agents-empty h2 {
+  font-size: 1.5rem;
+}
+.copilot.workspace-conversation {
+  position: static;
+  z-index: auto;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  height: auto;
+  border: none;
+  box-shadow: none;
+  background: var(--paper);
+  --chat-amber: var(--accent);
+}
+.workspace-conversation .chat-body {
+  min-height: 0;
+  flex: 1;
+}
+.workspace-conversation .chat-content,
+.workspace-conversation .chat-dock {
+  width: 100%;
+  margin-inline: auto;
+  padding: 1.25rem clamp(0.85rem, 3.5vw, 3.5rem);
+}
+.workspace-conversation .chat-content {
+  padding-bottom: 0.6rem;
+}
+.workspace-conversation .chat-dock {
+  padding-top: 0.55rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.workspace-conversation .chat-empty {
+  max-width: 32rem;
+  margin: 1.3rem auto;
+  text-align: center;
+}
+.workspace-conversation .chat-paper-stack {
+  display: none;
+}
+.timeline-byline {
+  justify-content: space-between;
+}
+.timeline-byline time {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font: 0.68rem/1.4 var(--notebook-mono, monospace);
+}
+.workspace-conversation .chat-message,
+.timeline-event {
+  position: relative;
+  margin-inline-start: 0.4rem;
+  padding: 0 0 1.2rem 1.1rem;
+  border-inline-start: 1px solid var(--line);
+  background: transparent;
+  max-width: none;
+  border-radius: 0;
+}
+.workspace-conversation .chat-message::before,
+.timeline-event::before {
+  content: "";
+  position: absolute;
+  inset: 0.3rem auto auto -0.25rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.workspace-conversation .chat-author {
+  font-size: 0.79rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.workspace-conversation .chat-message p,
+.timeline-event p {
+  font-size: 0.93rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.message-branch {
+  width: fit-content;
+  padding: 0.2rem 0;
+  font-size: 0.74rem;
+  color: var(--accent);
+}
+.operation-group > summary {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.operation-group svg {
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+.timeline-event {
+  font-size: 0.83rem;
+}
+.timeline-event h3,
+.timeline-event p {
+  margin: 0.42rem 0;
+}
+.timeline-event > a {
+  width: fit-content;
+  color: var(--accent);
+}
+.chat-content [data-target] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.context-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.context-chips button {
+  border: 0;
+  background: var(--soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+.agent-dialog,
+.context-results {
+  margin-top: 0.8rem;
+}
+.agent-dialog textarea {
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  padding: 0.5rem;
+}
+.context-results {
+  list-style: none;
+  max-height: 40dvh;
+  overflow: auto;
+  padding: 0;
+}
+.context-results li {
+  padding: 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+.context-results p {
+  margin: 0.3rem 0;
+}
+.context-results button {
+  font-size: 0.77rem;
+}
+.archived-notice {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+@media (max-width: 45rem) {
+  .agent-list-row time {
+    max-width: 5rem;
+  }
+  .workspace-conversation .chat-dock {
+    padding: 0.5rem;
+  }
+}
+
+.timeline-delivery {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0.3rem 0;
+}
+.diff-details pre {
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
