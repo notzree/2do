@@ -1,3 +1,4 @@
+import { env } from "cloudflare:test";
 import { expect, it } from "vite-plus/test";
 import { openApiDocument } from "../src/routes/contract.ts";
 import { operationEffect } from "../src/core/agent-approval.ts";
@@ -126,7 +127,6 @@ it("classifies every mutating planner tool before it reaches the command executo
 });
 
 it("approves an existing sibling reorder without changing task dependencies", async () => {
-  const { env } = await import("cloudflare:test");
   const planner = env.USER_PLANNER.getByName(crypto.randomUUID());
   const api = async (path: string, method = "GET", body?: object) => {
     const res = await planner.fetch("https://test/api/" + path, {
